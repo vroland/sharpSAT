@@ -5,7 +5,9 @@
 *.tar.gz
 *.out
 *.pyc
+*.swp
 
+build/
 
 # OS generated files #
 ######################
