@@ -13,12 +13,14 @@
 #include "component_types/component.h"
 #include "component_cache.h"
 #include "alt_component_analyzer.h"
+#include "gpusolver.h"
 //#include "component_analyzer.h"
 
 #include <vector>
 #include <gmpxx.h>
 #include "containers.h"
 #include "stack.h"
+#include "instance.h"
 
 #include "solver_config.h"
 using namespace std;
@@ -95,6 +97,8 @@ private:
   vector<Component *> component_stack_;
   ComponentCache cache_;
   ComponentAnalyzer ana_;
+
+  GPUSolver gpu_solver_;
 };
 
 
@@ -136,6 +140,10 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
        Component *p_new_comp = ana_.makeComponentFromArcheType();
        CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
          if (!cache_.manageNewComponent(top, *packed_comp)){
+            // there may be a better place to do this?
+            if (p_new_comp->num_variables() > 10 && p_new_comp->num_variables() < 24) {
+               gpu_solver_.solveComponent(p_new_comp, ana_);
+            }
             component_stack_.push_back(p_new_comp);
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
          }
