@@ -208,12 +208,21 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
                    self.print();
                    lit->print();
                    cerr << endl;
+               } else {
+                   // all non-active binary clauses
+                   // must be satisifed, or component is not sound as descibed in paper.
+                   // This is done through BCP?
+                   assert(isSatisfied(*lit));
                }
            }
            for (auto ofs = (*literals_)[self].watch_list_.rbegin(); *ofs != SENTINEL_CL; ofs++) {
                for (auto cit = lit_pool_->begin() + *ofs; *cit != clsSENTINEL; cit++) {
                    if (isActive(cit->var())) {
                     cit->print();
+                   } else {
+                    // if clause is still active,
+                    // there should not be any satisfying literal.
+                    assert(isResolved(*cit));
                    }
                }
                std::cerr << std::endl;
