@@ -110,6 +110,9 @@ public:
     return max_variable_id_;
   }
 
+  mpz_class solveComponentGPU(const Component* comp);
+
+
   ComponentArchetype &getArchetype(){
     return archetype_;
   }
@@ -137,6 +140,9 @@ private:
 
 
   vector<unsigned> variable_link_list_offsets_;
+
+  LiteralIndexedVector<Literal> * literals_;
+  vector<LiteralID>* lit_pool_;
 
   LiteralIndexedVector<TriValue> & literal_values_;
 

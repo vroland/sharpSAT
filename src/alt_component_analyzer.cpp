@@ -105,8 +105,8 @@ void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
         occ_long_clauses[v].end());
   }
 
-
-
+  literals_ = &literals;
+  lit_pool_ = &lit_pool;
 }
 
 
@@ -191,3 +191,34 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
         searchClause(*vt,*p, reinterpret_cast<LiteralID *>(p + 1 + *(p+1)));
   }
 }
+
+mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
+   for (auto it = comp->varsBegin(); *it != varsSENTINEL; it++) {
+       std::cerr << "\nvar: " << *it << std::endl;
+
+       bool truths[2] = {true, false};
+
+       // variable is not assigned
+       assert(isActive(*it));
+
+       for (auto t : truths) {
+           LiteralID self = LiteralID(*it, t);
+           for (auto lit = (*literals_)[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
+               if (isActive(lit->var())) {
+                   self.print();
+                   lit->print();
+                   cerr << endl;
+               }
+           }
+           for (auto ofs = (*literals_)[self].watch_list_.rbegin(); *ofs != SENTINEL_CL; ofs++) {
+               for (auto cit = lit_pool_->begin() + *ofs; *cit != clsSENTINEL; cit++) {
+                   if (isActive(cit->var())) {
+                    cit->print();
+                   }
+               }
+               std::cerr << std::endl;
+           }
+       }
+   }
+   return 0;
+};

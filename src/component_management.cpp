@@ -11,7 +11,6 @@ void ComponentManager::initialize(LiteralIndexedVector<Literal> & literals,
     vector<LiteralID> &lit_pool) {
 
   ana_.initialize(literals, lit_pool);
-  gpu_solver_.initialize(literals, lit_pool);
   // BEGIN CACHE INIT
   CacheableComponent::adjustPackSize(ana_.max_variable_id(), ana_.max_clause_id());
 

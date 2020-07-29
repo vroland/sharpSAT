@@ -13,7 +13,6 @@
 #include "component_types/component.h"
 #include "component_cache.h"
 #include "alt_component_analyzer.h"
-#include "gpusolver.h"
 //#include "component_analyzer.h"
 
 #include <vector>
@@ -97,8 +96,6 @@ private:
   vector<Component *> component_stack_;
   ComponentCache cache_;
   ComponentAnalyzer ana_;
-
-  GPUSolver gpu_solver_;
 };
 
 
@@ -142,7 +139,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
          if (!cache_.manageNewComponent(top, *packed_comp)){
             // there may be a better place to do this?
             if (p_new_comp->num_variables() > 10 && p_new_comp->num_variables() < 24) {
-               gpu_solver_.solveComponent(p_new_comp, ana_);
+               ana_.solveComponentGPU(p_new_comp);
             }
             component_stack_.push_back(p_new_comp);
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
