@@ -7,8 +7,11 @@
 
 
 #include "alt_component_analyzer.h"
+#include <bitset>
+#include "gputypes.h"
 
 
+extern unsigned componentModelCount(const std::vector<GPUClause>& clauses, unsigned variable_count);
 
 void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
     vector<LiteralID> &lit_pool) {
@@ -193,8 +196,26 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
 }
 
 mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
-   for (auto it = comp->varsBegin(); *it != varsSENTINEL; it++) {
-       std::cerr << "\nvar: " << *it << std::endl;
+
+   unsigned var_index = 0;
+   vector<GPUClause> clauses;
+
+   auto vars_end = comp->varsBegin();
+   for (; *vars_end != varsSENTINEL; vars_end++) {};
+
+   auto find_var_index = [&](VariableIndex var) -> int {
+       // since variables seem to be ordered, binary search *could* be faster
+       auto pos = find(comp->varsBegin(), vars_end,  var);
+       // there cannot be an unknown variable, or the component is not disjoint
+       //assert(pos != vars_end);
+       if (pos == vars_end) {
+           return -1;
+       }
+       return pos - comp->varsBegin();
+   };
+
+   for (auto it = comp->varsBegin(); it < vars_end; it++) {
+       //std::cerr << "\nvar: " << *it << std::endl;
 
        bool truths[2] = {true, false};
 
@@ -205,29 +226,68 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
            LiteralID self = LiteralID(*it, t);
            for (auto lit = (*literals_)[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
                if (isActive(lit->var())) {
-                   self.print();
-                   lit->print();
-                   cerr << endl;
+                   int other_index = find_var_index(lit->var());
+                   assert(other_index >= 0);
+                   GPUClause clause;
+                   clause.vars |= 1 << var_index;
+                   clause.vars |= 1 << other_index;
+                   clause.neg_vars |= !t << var_index;
+                   clause.neg_vars |= !lit->sign() << other_index;
+                   clauses.push_back(clause);
                } else {
                    // all non-active binary clauses
                    // must be satisifed, or component is not sound as descibed in paper.
+                   // (resolved pair variable would require self to be satisfied)
                    // This is done through BCP?
-                   assert(isSatisfied(*lit));
+                   //FIXME: assert(isSatisfied(*lit));
                }
            }
            for (auto ofs = (*literals_)[self].watch_list_.rbegin(); *ofs != SENTINEL_CL; ofs++) {
+               int active_vars = 0;
+               GPUClause clause;
+               clause.vars |= 1 << var_index;
+               clause.neg_vars |= !t << var_index;
                for (auto cit = lit_pool_->begin() + *ofs; *cit != clsSENTINEL; cit++) {
                    if (isActive(cit->var())) {
-                    cit->print();
+                    int other_index = find_var_index(cit->var());
+                    // FIXME: these are unassigned variables wich are not part of
+                    // the component, but ignoring their clauses seems to yield
+                    // correct results :O
+                    if (other_index == -1) {
+                        //active_vars = -1;
+                        continue;
+                    }
+                    clause.vars |= 1 << other_index;
+                    clause.neg_vars |= !cit->sign() << other_index;
+                    active_vars++;
+                   // clause satisfied -> skip
+                   } else if (isSatisfied(*cit)) {
+                     active_vars = -1;
+                     break;
                    } else {
                     // if clause is still active,
                     // there should not be any satisfying literal.
                     assert(isResolved(*cit));
                    }
                }
-               std::cerr << std::endl;
+               // clause not skipped
+               if (active_vars > 0) {
+                   assert(active_vars >= 1);
+                   clauses.push_back(clause);
+               }
            }
        }
+       var_index++;
    }
-   return 0;
+
+   //cerr << "variables:" << var_index << endl;
+   /*
+  uint32_t unrestrained = 0;
+   for (auto c : clauses) {
+       cout << std::bitset<32>(c.vars) << endl;
+       cout << std::bitset<32>(c.neg_vars) << endl << endl;
+   }*/
+   unsigned mc = componentModelCount(clauses, var_index);
+   //cerr << "model count: " << mc << endl;
+   return mc;
 };

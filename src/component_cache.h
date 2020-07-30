@@ -79,6 +79,7 @@ public:
        while(act_id){
          if (entry(act_id).equals(packed_comp)) {
            statistics_.incorporate_cache_hit(packed_comp);
+           //cout << "cache hit model count: " << entry(act_id).model_count() << endl;
            top.includeSolution(entry(act_id).model_count());
            return true;
          }

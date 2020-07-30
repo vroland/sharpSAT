@@ -138,11 +138,18 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
        CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
          if (!cache_.manageNewComponent(top, *packed_comp)){
             // there may be a better place to do this?
-            if (p_new_comp->num_variables() > 10 && p_new_comp->num_variables() < 24) {
-               ana_.solveComponentGPU(p_new_comp);
+            if (p_new_comp->num_variables() == 30 && p_new_comp->num_variables() < 31) {
+               //cerr << "gpu solve comp with " << p_new_comp->num_variables() << " vars." << endl;
+               mpz_class model_count = ana_.solveComponentGPU(p_new_comp);
+               cerr << "gpu mc: " << model_count << endl;
+               CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
+               cache_.storeValueOf(id, model_count);
+               bool hit = cache_.manageNewComponent(top, *packed_comp);
+               assert(hit);
+            } else {
+               component_stack_.push_back(p_new_comp);
+               p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
             }
-            component_stack_.push_back(p_new_comp);
-            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
          }
          else {
            delete packed_comp;

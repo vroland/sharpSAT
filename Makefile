@@ -1,5 +1,7 @@
 TARGETS=Release Debug Profiling
-EXAMPLE_RUN_PARAMS?= ~/GPUSAT_orig/examples/flat30-1.cnf
+#EXAMPLE_RUN_PARAMS?= ~/GPUSAT_orig/examples/flat30-1.cnf
+#EXAMPLE_RUN_PARAMS?= ~/instances/track1_private/track1_001.cnf
+EXAMPLE_RUN_PARAMS?= ~/instances/cachet/DQMR/or-50-10-1.cnf.wcnf
 
 .PHONY: configure_%
 configure_%:
