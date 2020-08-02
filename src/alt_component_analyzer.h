@@ -110,8 +110,7 @@ public:
     return max_variable_id_;
   }
 
-  mpz_class solveComponentGPU(const Component* comp);
-
+  int64_t solveComponentGPU(const Component* comp);
 
   ComponentArchetype &getArchetype(){
     return archetype_;

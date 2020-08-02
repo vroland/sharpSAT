@@ -11,7 +11,7 @@
 #include "gputypes.h"
 
 
-extern unsigned componentModelCount(const std::vector<GPUClause>& clauses, unsigned variable_count);
+extern unsigned long long componentModelCount(const std::vector<GPUClause>& clauses, uint64_t variable_count);
 
 void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
     vector<LiteralID> &lit_pool) {
@@ -195,7 +195,7 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
   }
 }
 
-mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
+int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
    unsigned var_index = 0;
    vector<GPUClause> clauses;
@@ -227,6 +227,10 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
            for (auto lit = (*literals_)[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
                if (isActive(lit->var())) {
                    int other_index = find_var_index(lit->var());
+                   if (other_index == -1) {
+                        //cerr << "weird." << endl;
+                        return -1;
+                   }
                    assert(other_index >= 0);
                    GPUClause clause;
                    clause.vars |= 1 << var_index;
@@ -254,6 +258,8 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
                     // the component, but ignoring their clauses seems to yield
                     // correct results :O
                     if (other_index == -1) {
+                        //cerr << "weird." << endl;
+                        return -1;
                         //active_vars = -1;
                         continue;
                     }
@@ -281,12 +287,12 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
    }
 
    //cerr << "variables:" << var_index << endl;
-   /*
-  uint32_t unrestrained = 0;
+   uint64_t unrestrained = 0;
    for (auto c : clauses) {
-       cout << std::bitset<32>(c.vars) << endl;
-       cout << std::bitset<32>(c.neg_vars) << endl << endl;
-   }*/
+       unrestrained |= c.vars;
+       //cout << std::bitset<32>(c.vars) << endl;
+       //cout << std::bitset<32>(c.neg_vars) << endl << endl;
+   }
    unsigned mc = componentModelCount(clauses, var_index);
    //cerr << "model count: " << mc << endl;
    return mc;

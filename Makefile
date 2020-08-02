@@ -1,7 +1,7 @@
 TARGETS=Release Debug Profiling
-#EXAMPLE_RUN_PARAMS?= ~/GPUSAT_orig/examples/flat30-1.cnf
-#EXAMPLE_RUN_PARAMS?= ~/instances/track1_private/track1_001.cnf
-EXAMPLE_RUN_PARAMS?= ~/instances/cachet/DQMR/or-50-10-1.cnf.wcnf
+#EXAMPLE_RUN_PARAMS?= ~/sharpSAT/test.cnf
+EXAMPLE_RUN_PARAMS?= ~/instances/track1_all/track1_010.cnf
+#EXAMPLE_RUN_PARAMS?= ~/instances/ai/hoos/Research/SAT/GenGCP/Flat200-479/flat200-99.cnf
 
 .PHONY: configure_%
 configure_%:
@@ -11,12 +11,15 @@ configure_%:
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
 	../../)
 
+build/%/Makefile: configure_%
+	echo "configuring $*"
+
 .PHONY: clean_%
 clean_%:
 	rm -r build/$*
 
 .PHONY: build_%
-build_%:
+build_%: build/%/Makefile
 	(cd build/$* && make)
 
 .PHONY: run_%
