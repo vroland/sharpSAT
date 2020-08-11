@@ -71,14 +71,18 @@ public:
   // check quickly if the model count of the component is cached
   // if so, incorporate it into the model count of top
   // if not, store the packed version of it in the entry_base of the cache
-  bool manageNewComponent(StackLevel &top, CacheableComponent &packed_comp) {
-       statistics_.num_cache_look_ups_++;
+  bool manageNewComponent(StackLevel &top, CacheableComponent &packed_comp, bool count_lookup) {
+       if (count_lookup) {
+           statistics_.num_cache_look_ups_++;
+       }
        unsigned table_ofs =  packed_comp.hashkey() & table_size_mask_;
 
        CacheEntryID act_id = table_[table_ofs];
        while(act_id){
          if (entry(act_id).equals(packed_comp)) {
-           statistics_.incorporate_cache_hit(packed_comp);
+           if (count_lookup) {
+             statistics_.incorporate_cache_hit(packed_comp);
+           }
            //cout << "cache hit model count: " << entry(act_id).model_count() << endl;
            top.includeSolution(entry(act_id).model_count());
            return true;

@@ -24,6 +24,8 @@ struct SolverConfiguration {
 
   // quiet = true will override verbose;
   bool quiet = false;
+
+  bool use_gpusolve = false;
 };
 
 #endif /* SOLVER_CONFIG_H_ */

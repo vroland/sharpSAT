@@ -20,7 +20,7 @@ void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
 
   search_stack_.reserve(max_variable_id_ + 1);
   var_frequency_scores_.resize(max_variable_id_ + 1, 0);
-  variable_occurrence_lists_pool_.clear();
+  clause_offsets_.clear();
   variable_link_list_offsets_.clear();
   variable_link_list_offsets_.resize(max_variable_id_ + 1, 0);
 
@@ -42,6 +42,7 @@ void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
       max_clause_id_++;
       it_lit += ClauseHeader::overheadInLits();
       it_curr_cl_st = it_lit + 1;
+      clause_offsets_.push_back((it_curr_cl_st - lit_pool.begin()));
       curr_clause_length = 0;
 
     } else {
@@ -74,15 +75,18 @@ void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
   unified_variable_links_lists_pool_.push_back(0);
   unified_variable_links_lists_pool_.push_back(0);
   for (unsigned v = 1; v < occs.size(); v++) {
-    // BEGIN data for binary clauses
+    // BEGIN data for binary clauses of negative literal
     variable_link_list_offsets_[v] = unified_variable_links_lists_pool_.size();
     for (auto l : literals[LiteralID(v, false)].binary_links_)
       if (l != SENTINEL_LIT)
-        unified_variable_links_lists_pool_.push_back(l.var());
+        unified_variable_links_lists_pool_.push_back(l.raw());
 
+    unified_variable_links_lists_pool_.push_back(0);
+
+    // BEGIN data for binary clauses of positive literal
     for (auto l : literals[LiteralID(v, true)].binary_links_)
       if (l != SENTINEL_LIT)
-        unified_variable_links_lists_pool_.push_back(l.var());
+        unified_variable_links_lists_pool_.push_back(l.raw());
 
     unified_variable_links_lists_pool_.push_back(0);
 
@@ -165,8 +169,16 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
     assert(isActive(*vt));
     unsigned *p = beginOfLinkList(*vt);
     for (; *p; p++) {
-      if(manageSearchOccurrenceOf(LiteralID(*p,true))){
-        var_frequency_scores_[*p]++;
+      auto lit = reinterpret_cast<const LiteralID *>(p);
+      if(manageSearchOccurrenceOf(*lit)){
+        var_frequency_scores_[lit->var()]++;
+        var_frequency_scores_[*vt]++;
+      }
+    }
+    for (p++; *p; p++) {
+      auto lit = reinterpret_cast<const LiteralID *>(p);
+      if(manageSearchOccurrenceOf(*lit)) {
+        var_frequency_scores_[lit->var()]++;
         var_frequency_scores_[*vt]++;
       }
     }
@@ -192,6 +204,7 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
     for (p++; *p ; p +=2)
       if(archetype_.clause_unseen_in_sup_comp(*p))
         searchClause(*vt,*p, reinterpret_cast<LiteralID *>(p + 1 + *(p+1)));
+
   }
 }
 
@@ -200,36 +213,37 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
    unsigned var_index = 0;
    vector<GPUClause> clauses;
 
-   auto vars_end = comp->varsBegin();
-   for (; *vars_end != varsSENTINEL; vars_end++) {};
+   auto long_clauses = 0;
+
+   if (search_stack_.size() < 16 || search_stack_.size() > 22) {
+     return -1;
+   }
 
    auto find_var_index = [&](VariableIndex var) -> int {
        // since variables seem to be ordered, binary search *could* be faster
-       auto pos = find(comp->varsBegin(), vars_end,  var);
+       auto pos = find(search_stack_.begin(), search_stack_.end(),  var);
        // there cannot be an unknown variable, or the component is not disjoint
        //assert(pos != vars_end);
-       if (pos == vars_end) {
+       if (pos == search_stack_.end()) {
            return -1;
        }
-       return pos - comp->varsBegin();
+       return pos - search_stack_.begin();
    };
 
-   for (auto it = comp->varsBegin(); it < vars_end; it++) {
+   for (auto it = search_stack_.begin(); it < search_stack_.end(); it++) {
        //std::cerr << "\nvar: " << *it << std::endl;
 
        bool truths[2] = {true, false};
 
        // variable is not assigned
        assert(isActive(*it));
-
        for (auto t : truths) {
            LiteralID self = LiteralID(*it, t);
            for (auto lit = (*literals_)[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
                if (isActive(lit->var())) {
                    int other_index = find_var_index(lit->var());
-                   if (other_index == -1) {
-                        //cerr << "weird." << endl;
-                        return -1;
+                   if (other_index < 0) {
+                       return -1;
                    }
                    assert(other_index >= 0);
                    GPUClause clause;
@@ -243,56 +257,55 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
                    // must be satisifed, or component is not sound as descibed in paper.
                    // (resolved pair variable would require self to be satisfied)
                    // This is done through BCP?
-                   //FIXME: assert(isSatisfied(*lit));
-               }
-           }
-           for (auto ofs = (*literals_)[self].watch_list_.rbegin(); *ofs != SENTINEL_CL; ofs++) {
-               int active_vars = 0;
-               GPUClause clause;
-               clause.vars |= 1 << var_index;
-               clause.neg_vars |= !t << var_index;
-               for (auto cit = lit_pool_->begin() + *ofs; *cit != clsSENTINEL; cit++) {
-                   if (isActive(cit->var())) {
-                    int other_index = find_var_index(cit->var());
-                    // FIXME: these are unassigned variables wich are not part of
-                    // the component, but ignoring their clauses seems to yield
-                    // correct results :O
-                    if (other_index == -1) {
-                        //cerr << "weird." << endl;
-                        return -1;
-                        //active_vars = -1;
-                        continue;
-                    }
-                    clause.vars |= 1 << other_index;
-                    clause.neg_vars |= !cit->sign() << other_index;
-                    active_vars++;
-                   // clause satisfied -> skip
-                   } else if (isSatisfied(*cit)) {
-                     active_vars = -1;
-                     break;
-                   } else {
-                    // if clause is still active,
-                    // there should not be any satisfying literal.
-                    assert(isResolved(*cit));
-                   }
-               }
-               // clause not skipped
-               if (active_vars > 0) {
-                   assert(active_vars >= 1);
-                   clauses.push_back(clause);
+                   //assert(isSatisfied(*lit));
                }
            }
        }
        var_index++;
-   }
+    }
 
-   //cerr << "variables:" << var_index << endl;
-   uint64_t unrestrained = 0;
-   for (auto c : clauses) {
-       unrestrained |= c.vars;
-       //cout << std::bitset<32>(c.vars) << endl;
-       //cout << std::bitset<32>(c.neg_vars) << endl << endl;
-   }
+    for (auto cid = comp->clsBegin(); *cid != clsSENTINEL; cid++) {
+       int active_vars = 0;
+       GPUClause clause;
+       clause.vars = 0;
+       clause.neg_vars = 0;
+       ClauseOfs ofs = clauseIdToOfs(*cid);
+       for (auto cit = lit_pool_->begin() + ofs; *cit != clsSENTINEL; cit++) {
+           if (isActive(cit->var())) {
+            int other_index = find_var_index(cit->var());
+            // FIXME: these are unassigned variables wich are not part of
+            // the component, but ignoring their clauses seems to yield
+            // correct results :O
+            if (other_index == -1) {
+                cout << "weird: " << cit->var() << endl;
+                //return -1;
+                active_vars = -1;
+                break;
+            }
+            clause.vars |= 1 << other_index;
+            clause.neg_vars |= !cit->sign() << other_index;
+            active_vars++;
+           // clause satisfied -> skip
+           } else if (isSatisfied(*cit)) {
+             //continue;
+             active_vars = -1;
+             break;
+           } else {
+            // if clause is still active,
+            // there should not be any satisfying literal.
+            assert(isResolved(*cit));
+           }
+       }
+       // clause not skipped
+       if (active_vars > 0) {
+           assert(active_vars >= 1);
+           long_clauses++;
+           clauses.push_back(clause);
+       }
+    }
+
+
+   cout << "clauses extracted: " << clauses.size() << " clauses declared: " << comp->numLongClauses() << " long: " << long_clauses << endl;
    unsigned mc = componentModelCount(clauses, var_index);
    //cerr << "model count: " << mc << endl;
    return mc;

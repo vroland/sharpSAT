@@ -110,12 +110,26 @@ public:
     return max_variable_id_;
   }
 
+  const ClauseOfs clauseIdToOfs(const ClauseIndex id) {
+    return clause_offsets_[id - 1];
+  }
+
   int64_t solveComponentGPU(const Component* comp);
 
   ComponentArchetype &getArchetype(){
     return archetype_;
   }
 
+  bool isActive(const LiteralID lit) {
+      return literal_values_[lit] == X_TRI;
+  }
+
+  bool isActive(const VariableIndex v) {
+    return literal_values_[LiteralID(v, true)] == X_TRI;
+  }
+
+  LiteralIndexedVector<Literal> * literals_;
+  vector<LiteralID>* lit_pool_;
 private:
   DataAndStatistics &statistics_;
 
@@ -125,9 +139,7 @@ private:
   unsigned max_clause_id_ = 0;
   unsigned max_variable_id_ = 0;
 
-  // this contains clause offsets of the clauses
-  // where each variable occurs in;
-  vector<ClauseOfs> variable_occurrence_lists_pool_;
+  vector<ClauseOfs> clause_offsets_;
 
   // this is a new idea,
   // for every variable we have a list
@@ -139,9 +151,6 @@ private:
 
 
   vector<unsigned> variable_link_list_offsets_;
-
-  LiteralIndexedVector<Literal> * literals_;
-  vector<LiteralID>* lit_pool_;
 
   LiteralIndexedVector<TriValue> & literal_values_;
 
@@ -157,13 +166,6 @@ private:
 
   bool isSatisfied(const LiteralID lit) {
     return literal_values_[lit] == T_TRI;
-  }
-  bool isActive(const LiteralID lit) {
-      return literal_values_[lit] == X_TRI;
-  }
-
-  bool isActive(const VariableIndex v) {
-    return literal_values_[LiteralID(v, true)] == X_TRI;
   }
 
   unsigned *beginOfLinkList(VariableIndex v) {

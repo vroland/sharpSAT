@@ -15,6 +15,7 @@
 #include "alt_component_analyzer.h"
 //#include "component_analyzer.h"
 
+#include <map>
 #include <vector>
 #include <gmpxx.h>
 #include "containers.h"
@@ -29,9 +30,16 @@ typedef AltComponentAnalyzer ComponentAnalyzer;
 class ComponentManager {
 public:
   ComponentManager(SolverConfiguration &config, DataAndStatistics &statistics,
-        LiteralIndexedVector<TriValue> & lit_values) :
+        LiteralIndexedVector<TriValue> & lit_values, LiteralIndexedVector<vector<ClauseOfs> >& occurrence_lists_) :
         config_(config), statistics_(statistics), cache_(statistics),
-        ana_(statistics,lit_values) {
+        ana_(statistics,lit_values), occurrence_lists_(occurrence_lists_) {
+  }
+
+  ~ComponentManager() {
+      cout << "component sizes:" << endl;
+      for (auto it = component_stats.begin(); it != component_stats.end(); it++) {
+        //cout << it->first << ": " << it->second << endl;
+      }
   }
 
   void initialize(LiteralIndexedVector<Literal> & literals,
@@ -96,6 +104,8 @@ private:
   vector<Component *> component_stack_;
   ComponentCache cache_;
   ComponentAnalyzer ana_;
+  LiteralIndexedVector<vector<ClauseOfs> >& occurrence_lists_;
+  map<unsigned, unsigned> component_stats;
 };
 
 
@@ -136,20 +146,51 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
        Component *p_new_comp = ana_.makeComponentFromArcheType();
        CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
-         if (!cache_.manageNewComponent(top, *packed_comp)){
+         if (!cache_.manageNewComponent(top, *packed_comp, true)){
+
+            component_stats[p_new_comp->num_variables()] += 1;
             // there may be a better place to do this?
-            if (p_new_comp->num_variables() >= 18 && p_new_comp->num_variables() <= 19) {
+            if (config_.use_gpusolve && p_new_comp->num_variables() == 19 && p_new_comp->num_variables() <= 23) {
+
+                float score1 = 0.0;
+                float connectedness_like = 0.0;
+                for (auto it = p_new_comp->varsBegin(); *it != varsSENTINEL; it++) {
+                    score1 += scoreOf(*it);
+
+                    auto plit = (*ana_.literals_)[LiteralID(*it, true)];
+                    auto nlit = (*ana_.literals_)[LiteralID(*it, false)];
+                    for (auto l : plit.binary_links_) {
+                        if (!ana_.isActive(l)) connectedness_like++;
+                    }
+                    for (auto l : nlit.binary_links_) {
+                        if (!ana_.isActive(l)) connectedness_like++;
+                    }
+                    for (auto cid = p_new_comp->clsBegin(); *cid != clsSENTINEL; cid++) {
+                        auto ofs = ana_.clauseIdToOfs(*cid);
+                        for (auto cit = ana_.lit_pool_->begin() + ofs; *cit != clsSENTINEL; cit++) {
+                            if (!ana_.isActive(*cit)) connectedness_like++;
+                        }
+                    }
+                    //cout << "var: " << *it << " penalty: " << penalty << endl;
+                }
+                score1 /= p_new_comp->num_variables();
+                connectedness_like /= p_new_comp->num_variables() * ana_.lit_pool_->size() / 1000.0f;
 
                //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses." << endl;
-               auto model_count = ana_.solveComponentGPU(p_new_comp);
-               if (model_count >= 0) {
-                   assert(model_count >= 0);
-                   //cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: " << model_count << endl;
-                   CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
-                   cache_.storeValueOf(id, model_count);
-                   bool hit = cache_.manageNewComponent(top, *packed_comp);
-                   assert(hit);
-                   continue;
+               if (connectedness_like < 1) {
+                   auto model_count = ana_.solveComponentGPU(p_new_comp);
+                   if (model_count >= 0) {
+                       assert(model_count >= 0);
+                       cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: "
+                            << model_count << " score 1: " << score1 <<  " score 2: " << connectedness_like << endl;
+                       CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
+                       cache_.storeValueOf(id, model_count);
+                       bool hit = cache_.manageNewComponent(top, *packed_comp, false);
+                       assert(hit);
+                       continue;
+                   } else {
+                       cout << "invalid component!" << endl;
+                   }
                }
             }
             component_stack_.push_back(p_new_comp);

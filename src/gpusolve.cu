@@ -42,6 +42,7 @@ __global__ void solveComponent(
         unsigned scale_factor) 
 {
     uint64_t id = get_global_id() << scale_factor;
+    unsigned hits = 0;
 
     for (int assignment_idx = 0; assignment_idx < (1 << scale_factor); assignment_idx++) {
         uint64_t assignment = id | assignment_idx;
@@ -57,14 +58,15 @@ __global__ void solveComponent(
             }
         }
         if (!conflict) {
-            atomicAdd_block(solution_counter, 1);
+            hits++;
         }
     }
+    atomicAdd_block(solution_counter, hits);
 }
 
 unsigned long long componentModelCount(const std::vector<GPUClause>& clauses, uint64_t variable_count) {
     
-    int64_t threadsPerBlock = 128;
+    int64_t threadsPerBlock = 1024;
     
     uint64_t assignments = 1l << variable_count;
 

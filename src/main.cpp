@@ -38,6 +38,8 @@ int main(int argc, char *argv[]) {
       theSolver.config().perform_component_caching = false;
     if (strcmp(argv[i], "-noIBCP") == 0)
       theSolver.config().perform_failed_lit_test = false;
+    if (strcmp(argv[i], "-gpu") == 0)
+      theSolver.config().use_gpusolve = true;
     if (strcmp(argv[i], "-noPP") == 0)
       theSolver.config().perform_pre_processing = false;
     else if (strcmp(argv[i], "-q") == 0)
@@ -50,6 +52,7 @@ int main(int argc, char *argv[]) {
         return -1;
       }
       theSolver.config().time_bound_seconds = atol(argv[i + 1]);
+      theSolver.setTimeBound(theSolver.config().time_bound_seconds);
       if (theSolver.config().verbose)
         cout << "time bound set to" << theSolver.config().time_bound_seconds << "s\n";
      } else if (strcmp(argv[i], "-cs") == 0) {
