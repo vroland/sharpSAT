@@ -9,18 +9,16 @@ configure_%:
 	(cd build/$* && cmake \
 		-DCMAKE_BUILD_TYPE=$* \
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+		-G Ninja \
 	../../)
-
-build/%/Makefile: configure_%
-	echo "configuring $*"
 
 .PHONY: clean_%
 clean_%:
 	rm -r build/$*
 
 .PHONY: build_%
-build_%: build/%/Makefile
-	(cd build/$* && make)
+build_%: configure_%
+	cmake --build build/$*
 
 .PHONY: run_%
 run_%: build_%

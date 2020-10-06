@@ -1,0 +1,3 @@
+[submodule "GPUSAT"]
+	path = GPUSAT
+	url = https://github.com/vroland/GPUSAT
