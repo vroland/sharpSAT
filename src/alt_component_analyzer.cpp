@@ -7,11 +7,14 @@
 
 
 #include "alt_component_analyzer.h"
-#include <bitset>
+#include <algorithm>
 #include "gputypes.h"
+#include <gpusat.h>
+#include <chrono>
+#include <FitnessFunctions/CutSetWidthFitnessFunction.h>
 
 
-extern unsigned long long componentModelCount(const std::vector<GPUClause>& clauses, uint64_t variable_count);
+//extern unsigned long long componentModelCount(const std::vector<GPUClause>& clauses, uint64_t variable_count);
 
 void AltComponentAnalyzer::initialize(LiteralIndexedVector<Literal> & literals,
     vector<LiteralID> &lit_pool) {
@@ -208,27 +211,36 @@ void AltComponentAnalyzer::recordComponentOf(const VariableIndex var) {
   }
 }
 
-int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
+mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
    unsigned var_index = 0;
    vector<GPUClause> clauses;
 
    auto long_clauses = 0;
 
+   /*
    if (search_stack_.size() < 16 || search_stack_.size() > 22) {
      return -1;
    }
+   */
 
-   auto find_var_index = [&](VariableIndex var) -> int {
-       // since variables seem to be ordered, binary search *could* be faster
-       auto pos = find(search_stack_.begin(), search_stack_.end(),  var);
+   vector<VariableIndex> vstack(search_stack_);
+   sort(vstack.begin(), vstack.end());
+
+   gpusat::satformulaType formula;
+   formula.numVars = vstack.size();
+
+   auto local_var_index = [&](VariableIndex var) -> int {
+       auto pos = lower_bound(vstack.begin(), vstack.end(),  var);
        // there cannot be an unknown variable, or the component is not disjoint
        //assert(pos != vars_end);
-       if (pos == search_stack_.end()) {
+       if (*pos != var) {
            return -1;
        }
-       return pos - search_stack_.begin();
+       // variables in htd start with one.
+       return pos - vstack.begin() + 1;
    };
+   auto mul_sign = [](LiteralID& lit) -> int64_t { return lit.sign() ? 1 : -1; };
 
    for (auto it = search_stack_.begin(); it < search_stack_.end(); it++) {
        //std::cerr << "\nvar: " << *it << std::endl;
@@ -239,25 +251,21 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
        assert(isActive(*it));
        for (auto t : truths) {
            LiteralID self = LiteralID(*it, t);
+           int64_t self_local = local_var_index(self.var()) * mul_sign(self);
            for (auto lit = (*literals_)[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
                if (isActive(lit->var())) {
-                   int other_index = find_var_index(lit->var());
-                   if (other_index < 0) {
+                   int64_t local = local_var_index(lit->var());
+                   if (local < 0) {
+                       cout << "bin clause not in stack: " << lit->var() << endl;
                        return -1;
                    }
-                   assert(other_index >= 0);
-                   GPUClause clause;
-                   clause.vars |= 1 << var_index;
-                   clause.vars |= 1 << other_index;
-                   clause.neg_vars |= !t << var_index;
-                   clause.neg_vars |= !lit->sign() << other_index;
-                   clauses.push_back(clause);
+                   formula.clauses.push_back({self_local, local * mul_sign(*lit)});
                } else {
                    // all non-active binary clauses
                    // must be satisifed, or component is not sound as descibed in paper.
                    // (resolved pair variable would require self to be satisfied)
-                   // This is done through BCP?
-                   //assert(isSatisfied(*lit));
+                   // FIXME: This does not hold :/
+                   //assert(local_var_index(lit->var()) == -1);
                }
            }
        }
@@ -266,29 +274,22 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
     for (auto cid = comp->clsBegin(); *cid != clsSENTINEL; cid++) {
        int active_vars = 0;
-       GPUClause clause;
-       clause.vars = 0;
-       clause.neg_vars = 0;
+       vector<int64_t> clause;
        ClauseOfs ofs = clauseIdToOfs(*cid);
        for (auto cit = lit_pool_->begin() + ofs; *cit != clsSENTINEL; cit++) {
            if (isActive(cit->var())) {
-            int other_index = find_var_index(cit->var());
-            // FIXME: these are unassigned variables wich are not part of
-            // the component, but ignoring their clauses seems to yield
-            // correct results :O
-            if (other_index == -1) {
-                cout << "weird: " << cit->var() << endl;
-                //return -1;
-                active_vars = -1;
-                break;
-            }
-            clause.vars |= 1 << other_index;
-            clause.neg_vars |= !cit->sign() << other_index;
-            active_vars++;
+               int64_t local = local_var_index(cit->var());
+               if (local < 0) {
+                   cout << "long clause not in stack: " << cit->var() << endl;
+                   return -1;
+               }
+               clause.push_back(local * mul_sign(*cit));
+               active_vars++;
            // clause satisfied -> skip
            } else if (isSatisfied(*cit)) {
              //continue;
              active_vars = -1;
+             cout << "clause satisfied" << endl;
              break;
            } else {
             // if clause is still active,
@@ -300,13 +301,53 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
        if (active_vars > 0) {
            assert(active_vars >= 1);
            long_clauses++;
-           clauses.push_back(clause);
+           formula.clauses.push_back(clause);
        }
     }
 
+   //cout << "p cnf " << formula.numVars << " " << formula.clauses.size() << endl;
+   // sort clauses, this is expected by gpusat
+   for (auto& clause : formula.clauses) {
+        sort(clause.begin(), clause.end(), gpusat::compVars);
+        for (auto lit : clause) {
+            //cout << lit << " ";
+        }
+        //cout << "0" << endl;
+   }
 
-   cout << "clauses extracted: " << clauses.size() << " clauses declared: " << comp->numLongClauses() << " long: " << long_clauses << endl;
-   unsigned mc = componentModelCount(clauses, var_index);
-   //cerr << "model count: " << mc << endl;
-   return mc;
+   auto fitness = new gpusat::CutSetWidthFitnessFunction();
+
+   auto start = chrono::high_resolution_clock::now();
+   auto decomp = gpusat::GPUSAT::decompose(formula, *fitness, 30);
+   auto end = chrono::high_resolution_clock::now();
+
+    cout << "PROF decomposition time: " << chrono::duration_cast<chrono::microseconds>(end - start).count() << endl;
+   if (decomp.width >= 30) {
+       cout << "too large treewidth." << endl;
+       return -1;
+   }
+   auto result = gpusat::GPUSAT::preprocess(formula, decomp, gsat.recommended_bag_width());
+   if (result.first != gpusat::PreprocessingResult::SUCCESS) {
+        return -1;
+   }
+   //cout << "treewidth: " << decomp.width << endl;
+   //cout << "clauses extracted: " << formula.clauses.size() << " clauses declared: " << comp->numLongClauses() << " long: " << long_clauses << "num vars: " << formula.numVars << endl;
+   gpusat::GpusatConfig cfg;
+   cfg.trace = false;
+   cfg.solution_type = gpusat::dataStructure::ARRAY;
+   cfg.solve_cfg.no_exponent = false;
+   cfg.solve_cfg.weighted = false;
+   cfg.max_bag_size = 0;
+
+   boost::multiprecision::cpp_bin_float_100 mc;
+   try {
+       mc = gsat.solve(formula, decomp, cfg, result.second);
+   } catch (const std::bad_optional_access) {
+       return -1;
+   }
+
+
+   //cerr << "model count: " << mc.str() << endl;
+   // FIXME: conversion via string is a crude hack
+   return mpz_class(mc.str());
 };

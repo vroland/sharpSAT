@@ -15,7 +15,7 @@
 #include "component_types/base_packed_component.h"
 #include "component_types/component_archetype.h"
 
-
+#include <gpusat.h>
 
 #include <vector>
 #include <cmath>
@@ -114,7 +114,7 @@ public:
     return clause_offsets_[id - 1];
   }
 
-  int64_t solveComponentGPU(const Component* comp);
+  mpz_class solveComponentGPU(const Component* comp);
 
   ComponentArchetype &getArchetype(){
     return archetype_;
@@ -132,6 +132,7 @@ public:
   vector<LiteralID>* lit_pool_;
 private:
   DataAndStatistics &statistics_;
+  gpusat::GPUSAT gsat;
 
   // the id of the last clause
   // note that clause ID is the clause number,

@@ -8,6 +8,8 @@
 #ifndef COMPONENT_CACHE_INL_H_
 #define COMPONENT_CACHE_INL_H_
 
+#include <chrono>
+
 CacheEntryID ComponentCache::storeAsEntry(CacheableComponent &ccomp, CacheEntryID super_comp_id){
     CacheEntryID id;
 
@@ -150,7 +152,6 @@ void ComponentCache::storeValueOf(CacheEntryID id, const mpz_class &model_count)
 
   entry(id).set_model_count(model_count,my_time_);
   entry(id).set_creation_time(my_time_);
-
   entry(id).set_next_bucket_element(table_[table_ofs]);
   table_[table_ofs] = id;
 

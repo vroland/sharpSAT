@@ -10,6 +10,7 @@
 
 #include <assert.h>
 #include <vector>
+#include <chrono>
 
 #include "../primitive_types.h"
 
@@ -91,6 +92,7 @@ public:
     data_.clear();
   }
 
+  chrono::time_point<chrono::high_resolution_clock> cache_time_;
 private:
   // data_ stores the component data:
   // for better cache performance the

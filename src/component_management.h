@@ -15,14 +15,17 @@
 #include "alt_component_analyzer.h"
 //#include "component_analyzer.h"
 
+#include <signal.h>
 #include <map>
 #include <vector>
+#include <chrono>
 #include <gmpxx.h>
 #include "containers.h"
 #include "stack.h"
 #include "instance.h"
 
 #include "solver_config.h"
+
 using namespace std;
 
 typedef AltComponentAnalyzer ComponentAnalyzer;
@@ -49,9 +52,15 @@ public:
       return ana_.scoreOf(v);
   }
 
-  void cacheModelCountOf(unsigned stack_comp_id, const mpz_class &value) {
-    if (config_.perform_component_caching)
-      cache_.storeValueOf(component_stack_[stack_comp_id]->id(), value);
+  void cacheModelCountOf(StackLevel& top, unsigned stack_comp_id, const mpz_class &value) {
+
+    if (config_.perform_component_caching) {
+      auto component = component_stack_[stack_comp_id];
+      cache_.storeValueOf(component->id(), value);
+      auto now = chrono::high_resolution_clock::now();
+      auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_);
+      cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
+    }
   }
 
   Component & superComponentOf(StackLevel &lev) {
@@ -146,57 +155,43 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
        Component *p_new_comp = ana_.makeComponentFromArcheType();
        CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
-         if (!cache_.manageNewComponent(top, *packed_comp, true)){
 
-            component_stats[p_new_comp->num_variables()] += 1;
+       auto cache_result = cache_.manageNewComponent(top, *packed_comp, true);
+         if (!cache_result.has_value()) {
+
+            //component_stats[p_new_comp->num_variables()] += 1;
+            p_new_comp->cache_time_ = chrono::high_resolution_clock::now();
+            component_stack_.push_back(p_new_comp);
+            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
+
             // there may be a better place to do this?
-            if (config_.use_gpusolve && p_new_comp->num_variables() == 19 && p_new_comp->num_variables() <= 23) {
-
-                float score1 = 0.0;
-                float connectedness_like = 0.0;
-                for (auto it = p_new_comp->varsBegin(); *it != varsSENTINEL; it++) {
-                    score1 += scoreOf(*it);
-
-                    auto plit = (*ana_.literals_)[LiteralID(*it, true)];
-                    auto nlit = (*ana_.literals_)[LiteralID(*it, false)];
-                    for (auto l : plit.binary_links_) {
-                        if (!ana_.isActive(l)) connectedness_like++;
-                    }
-                    for (auto l : nlit.binary_links_) {
-                        if (!ana_.isActive(l)) connectedness_like++;
-                    }
-                    for (auto cid = p_new_comp->clsBegin(); *cid != clsSENTINEL; cid++) {
-                        auto ofs = ana_.clauseIdToOfs(*cid);
-                        for (auto cit = ana_.lit_pool_->begin() + ofs; *cit != clsSENTINEL; cit++) {
-                            if (!ana_.isActive(*cit)) connectedness_like++;
-                        }
-                    }
-                    //cout << "var: " << *it << " penalty: " << penalty << endl;
-                }
-                score1 /= p_new_comp->num_variables();
-                connectedness_like /= p_new_comp->num_variables() * ana_.lit_pool_->size() / 1000.0f;
-
-               //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses." << endl;
-               if (connectedness_like < 1) {
+            if (config_.use_gpusolve && p_new_comp->num_variables() >= 300 && p_new_comp->num_variables() <= 400) {
+               if (true) {
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
-                   if (model_count >= 0) {
+                   if (model_count > 0) {
                        assert(model_count >= 0);
-                       cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: "
-                            << model_count << " score 1: " << score1 <<  " score 2: " << connectedness_like << endl;
-                       CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
-                       cache_.storeValueOf(id, model_count);
-                       bool hit = cache_.manageNewComponent(top, *packed_comp, false);
-                       assert(hit);
-                       continue;
-                   } else {
+                        //cout << "component with " << p_new_comp->num_variables() << " variables." << endl;
+                       cout << "model count: " << model_count << " vars: " << p_new_comp->num_variables() << endl;
+                       /*if (model_count != cache_result.value()) {
+                            cout << "cached model count: " << cache_result.value() << endl;
+                           raise(SIGSEGV);
+                       }
+                       */
+                       //CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
+                       //cache_.storeValueOf(id, model_count);
+                       cacheModelCountOf(top, component_stack_.size() - 1, model_count);
+                       auto hit = cache_.manageNewComponent(top, *packed_comp, false);
+                       assert(hit.has_value());
+                       component_stack_.pop_back();
+                       //continue;
+                   } else if (model_count < 0) {
                        cout << "invalid component!" << endl;
                    }
                }
             }
-            component_stack_.push_back(p_new_comp);
-            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
          }
          else {
+
            delete packed_comp;
            delete p_new_comp;
          }

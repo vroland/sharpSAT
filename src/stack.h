@@ -11,6 +11,7 @@
 #include <gmpxx.h>
 
 class StackLevel {
+    public:
   /// active Component, once initialized, it should not change
   const unsigned super_component_ = 0;
   // branch

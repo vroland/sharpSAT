@@ -183,6 +183,7 @@ SOLVER_StateT Solver::countSAT() {
 
 	while (true) {
 		while (comp_manager_.findNextRemainingComponentOf(stack_.top())) {
+                        cout << "next component..." << endl;
 			decideLiteral();
 			if (stopwatch_.timeBoundBroken())
 				return TIMEOUT;
@@ -268,7 +269,7 @@ retStateT Solver::backtrack() {
 			return RESOLVED;
 		}
 		// OTHERWISE:  backtrack further
-		comp_manager_.cacheModelCountOf(stack_.top().super_component(),
+		comp_manager_.cacheModelCountOf(stack_.top(), stack_.top().super_component(),
 				stack_.top().getTotalModelCount());
 
 		if (stack_.get_decision_level() <= 0)
