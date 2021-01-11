@@ -59,7 +59,7 @@ public:
       cache_.storeValueOf(component->id(), value);
       auto now = chrono::high_resolution_clock::now();
       auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_);
-      cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
+      //cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
     }
   }
 
@@ -165,7 +165,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
 
             // there may be a better place to do this?
-            if (config_.use_gpusolve && p_new_comp->num_variables() >= 300 && p_new_comp->num_variables() <= 400) {
+            if (config_.use_gpusolve && p_new_comp->num_variables() >= 200 && p_new_comp->num_variables() <= 1000) {
                if (true) {
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
                    if (model_count > 0) {

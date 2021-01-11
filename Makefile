@@ -2,7 +2,7 @@ TARGETS=Release Debug Profiling
 #EXAMPLE_RUN_PARAMS?= ~/sharpSAT/test2.cnf
 #EXAMPLE_RUN_PARAMS?= ~/instances/cachet/DQMR/or-100-10-1-UC-10.cnf.wcnf
 #EXAMPLE_RUN_PARAMS?= ~/instances/all_Count_combined/13A-1.cnf
-EXAMPLE_RUN_PARAMS?= ~/instances/track1_all/track1_010.cnf
+EXAMPLE_RUN_PARAMS?= ~/instances/track1_all/track1_099.cnf
 #EXAMPLE_RUN_PARAMS?= ~/instances/ai/hoos/Research/SAT/GenGCP/Flat200-479/flat200-99.cnf
 
 .PHONY: configure_%

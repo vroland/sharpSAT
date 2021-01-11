@@ -259,7 +259,10 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
                        cout << "bin clause not in stack: " << lit->var() << endl;
                        return -1;
                    }
-                   formula.clauses.push_back({self_local, local * mul_sign(*lit)});
+                   formula.clause_offsets.push_back(formula.clause_bag.size());
+                   formula.clause_bag.push_back(self_local);
+                   formula.clause_bag.push_back(local * mul_sign(*lit));
+                   formula.clause_bag.push_back(0);
                } else {
                    // all non-active binary clauses
                    // must be satisifed, or component is not sound as descibed in paper.
@@ -301,19 +304,22 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
        if (active_vars > 0) {
            assert(active_vars >= 1);
            long_clauses++;
-           formula.clauses.push_back(clause);
+           formula.clause_offsets.push_back(formula.clause_bag.size());
+           formula.clause_bag.reserve(formula.clause_bag.size() + clause.size());
+           formula.clause_bag.insert(formula.clause_bag.end(), clause.begin(), clause.end());
+           formula.clause_bag.push_back(0);
        }
     }
 
    //cout << "p cnf " << formula.numVars << " " << formula.clauses.size() << endl;
    // sort clauses, this is expected by gpusat
-   for (auto& clause : formula.clauses) {
-        sort(clause.begin(), clause.end(), gpusat::compVars);
-        for (auto lit : clause) {
-            //cout << lit << " ";
-        }
-        //cout << "0" << endl;
-   }
+   // for (auto& clause : formula.clauses) {
+   //      sort(clause.begin(), clause.end(), gpusat::compVars);
+   //      for (auto lit : clause) {
+   //          //cout << lit << " ";
+   //      }
+   //      //cout << "0" << endl;
+   // }
 
    auto fitness = new gpusat::CutSetWidthFitnessFunction();
 
@@ -349,5 +355,5 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
    //cerr << "model count: " << mc.str() << endl;
    // FIXME: conversion via string is a crude hack
-   return mpz_class(mc.str());
+   return mpz_class(mc.str(100000));
 };

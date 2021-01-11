@@ -183,7 +183,7 @@ SOLVER_StateT Solver::countSAT() {
 
 	while (true) {
 		while (comp_manager_.findNextRemainingComponentOf(stack_.top())) {
-                        cout << "next component..." << endl;
+                        //cout << "next component..." << endl;
 			decideLiteral();
 			if (stopwatch_.timeBoundBroken())
 				return TIMEOUT;
