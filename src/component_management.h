@@ -150,7 +150,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
             component_stats[p_new_comp->num_variables()] += 1;
             // there may be a better place to do this?
-            if (config_.use_gpusolve && p_new_comp->num_variables() == 19 && p_new_comp->num_variables() <= 23) {
+            if (config_.use_gpusolve && p_new_comp->num_variables() >= 18 && p_new_comp->num_variables() <= 23) {
 
                 float score1 = 0.0;
                 float connectedness_like = 0.0;
@@ -176,8 +176,8 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
                 score1 /= p_new_comp->num_variables();
                 connectedness_like /= p_new_comp->num_variables() * ana_.lit_pool_->size() / 1000.0f;
 
-               //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses." << endl;
-               if (connectedness_like < 1) {
+               //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses. connectedness: " << connectedness_like << endl;
+               if (connectedness_like < 10) {
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
                    if (model_count >= 0) {
                        assert(model_count >= 0);
