@@ -152,37 +152,43 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
             // there may be a better place to do this?
             if (config_.use_gpusolve && p_new_comp->num_variables() >= 18 && p_new_comp->num_variables() <= 23) {
 
-                float score1 = 0.0;
-                float connectedness_like = 0.0;
+                float in_binary = 0.0;
+                float in_long = 0.0;
                 for (auto it = p_new_comp->varsBegin(); *it != varsSENTINEL; it++) {
-                    score1 += scoreOf(*it);
+                    //score1 += scoreOf(*it);
 
                     auto plit = (*ana_.literals_)[LiteralID(*it, true)];
                     auto nlit = (*ana_.literals_)[LiteralID(*it, false)];
                     for (auto l : plit.binary_links_) {
-                        if (!ana_.isActive(l)) connectedness_like++;
+                        if (!ana_.isActive(l)) in_binary++;
                     }
                     for (auto l : nlit.binary_links_) {
-                        if (!ana_.isActive(l)) connectedness_like++;
+                        if (!ana_.isActive(l)) in_binary++;
                     }
+                    /*
                     for (auto cid = p_new_comp->clsBegin(); *cid != clsSENTINEL; cid++) {
                         auto ofs = ana_.clauseIdToOfs(*cid);
                         for (auto cit = ana_.lit_pool_->begin() + ofs; *cit != clsSENTINEL; cit++) {
-                            if (!ana_.isActive(*cit)) connectedness_like++;
+                            if (!ana_.isActive(*cit)) in_long++;
                         }
                     }
+                    */
                     //cout << "var: " << *it << " penalty: " << penalty << endl;
                 }
-                score1 /= p_new_comp->num_variables();
-                connectedness_like /= p_new_comp->num_variables() * ana_.lit_pool_->size() / 1000.0f;
+                in_binary /= 2;
+                in_long = p_new_comp->numLongClauses();
+                //score1 /= p_new_comp->num_variables();
+                //connectedness_like /= p_new_comp->num_variables(); //* ana_.lit_pool_->size();
+                //connectedness_like /= p_new_comp->num_variables(); //* ana_.lit_pool_->size();
 
-               //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses. connectedness: " << connectedness_like << endl;
-               if (connectedness_like < 10) {
+                //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses. connectedness: " << connectedness_like << endl;
+               //cout << "in binray: " << in_binary << " in long: " << in_long << endl;
+               if (in_long > in_binary) {
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
                    if (model_count >= 0) {
                        assert(model_count >= 0);
                        cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: "
-                            << model_count << " score 1: " << score1 <<  " score 2: " << connectedness_like << endl;
+                            << model_count << " in_binary: " << in_binary <<  " in_long: " << in_long << endl;
                        CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
                        cache_.storeValueOf(id, model_count);
                        bool hit = cache_.manageNewComponent(top, *packed_comp, false);
