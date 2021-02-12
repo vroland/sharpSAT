@@ -160,15 +160,10 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
        Component *p_new_comp = ana_.makeComponentFromArcheType();
        CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
 
+
        auto cache_result = cache_.manageNewComponent(top, *packed_comp, true);
          if (!cache_result.has_value()) {
 
-            if (components_stored == 0) {
-                //component_stats[p_new_comp->num_variables()] += 1;
-                p_new_comp->cache_time_ = make_optional(chrono::high_resolution_clock::now());
-            } else {
-                p_new_comp->cache_time_ = nullopt;
-            }
             components_stored++;
             component_stack_.push_back(p_new_comp);
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
@@ -176,6 +171,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
             // there may be a better place to do this?
             if (config_.use_gpusolve && p_new_comp->num_variables() >= 200 && p_new_comp->num_variables() <= 1000) {
                if (true) {
+                   p_new_comp->cache_time_ = make_optional(chrono::high_resolution_clock::now());
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
                    if (model_count > 0) {
                        assert(model_count >= 0);
@@ -191,6 +187,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
                        cacheModelCountOf(top, component_stack_.size() - 1, model_count);
                        auto hit = cache_.manageNewComponent(top, *packed_comp, false);
                        assert(hit.has_value());
+                       components_stored--;
                        component_stack_.pop_back();
                        //continue;
                    } else if (model_count < 0) {
@@ -206,6 +203,9 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
          }
      }
 
+   if (components_stored > 0) {
+        component_stack_.back()->cache_time_ = make_optional(chrono::high_resolution_clock::now());
+   }
    top.set_unprocessed_components_end(component_stack_.size());
    sortComponentStackRange(new_comps_start_ofs, component_stack_.size());
 }
