@@ -17,7 +17,7 @@
 
 #include <map>
 #include <vector>
-#include <gmpxx.h>
+#include <optional>
 #include "containers.h"
 #include "stack.h"
 #include "instance.h"
@@ -50,8 +50,15 @@ public:
   }
 
   void cacheModelCountOf(unsigned stack_comp_id, const mpz_class &value) {
-    if (config_.perform_component_caching)
-      cache_.storeValueOf(component_stack_[stack_comp_id]->id(), value);
+    if (config_.perform_component_caching) {
+        auto component = component_stack_[stack_comp_id];
+        cache_.storeValueOf(component->id(), value);
+        if (component->cache_time_.has_value()) {
+          auto now = chrono::high_resolution_clock::now();
+          auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_.value());
+          cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
+        }
+    }
   }
 
   Component & superComponentOf(StackLevel &lev) {
@@ -140,6 +147,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
    ana_.setupAnalysisContext(top, super_comp);
 
+   int components_stored = 0;
    for (auto vt = super_comp.varsBegin(); *vt != varsSENTINEL; vt++)
      if (ana_.isUnseenAndActive(*vt) &&
          ana_.exploreRemainingCompOf(*vt)){
@@ -149,6 +157,16 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
          if (!cache_.manageNewComponent(top, *packed_comp, true)){
 
             component_stats[p_new_comp->num_variables()] += 1;
+            if (components_stored == 0) {
+                //component_stats[p_new_comp->num_variables()] += 1;
+                p_new_comp->cache_time_ = make_optional(chrono::high_resolution_clock::now());
+            } else {
+                p_new_comp->cache_time_ = nullopt;
+            }
+            components_stored++;
+            component_stack_.push_back(p_new_comp);
+            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
+
             // there may be a better place to do this?
             if (config_.use_gpusolve && p_new_comp->num_variables() >= 18 && p_new_comp->num_variables() <= 23) {
 
@@ -189,18 +207,15 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
                        assert(model_count >= 0);
                        cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: "
                             << model_count << " in_binary: " << in_binary <<  " in_long: " << in_long << endl;
-                       CacheEntryID id = cache_.storeAsEntry(*packed_comp, super_comp.id());
-                       cache_.storeValueOf(id, model_count);
+                       cacheModelCountOf(component_stack_.size() -1, model_count);
                        bool hit = cache_.manageNewComponent(top, *packed_comp, false);
                        assert(hit);
-                       continue;
+                       component_stack_.pop_back();
                    } else {
                        cout << "invalid component!" << endl;
                    }
                }
             }
-            component_stack_.push_back(p_new_comp);
-            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
          }
          else {
            delete packed_comp;

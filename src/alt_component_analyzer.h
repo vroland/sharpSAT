@@ -19,7 +19,6 @@
 
 #include <vector>
 #include <cmath>
-#include <gmpxx.h>
 #include "containers.h"
 #include "stack.h"
 
