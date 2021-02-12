@@ -13,7 +13,7 @@ find_library(GMPXX_LIB gmpxx)
 add_subdirectory(src)
 
 add_executable (sharpSAT src/main.cpp)
-target_link_libraries(sharpSAT libsharpSAT ${GMP_LIB} ${GMPXX_LIB}) 
+target_link_libraries(sharpSAT libsharpSAT libgmp.a libgmpxx.a -static-libgcc -static-libstdc++) 
 
 # FIXME: Encapsulate CUDA in gpusat
 target_include_directories(sharpSAT PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})

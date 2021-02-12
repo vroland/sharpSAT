@@ -132,7 +132,7 @@ public:
   vector<LiteralID>* lit_pool_;
 private:
   DataAndStatistics &statistics_;
-  gpusat::GPUSAT gsat;
+  gpusat::GPUSAT gsat = gpusat::GPUSAT(true);
 
   // the id of the last clause
   // note that clause ID is the clause number,

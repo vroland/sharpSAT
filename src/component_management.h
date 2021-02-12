@@ -57,9 +57,11 @@ public:
     if (config_.perform_component_caching) {
       auto component = component_stack_[stack_comp_id];
       cache_.storeValueOf(component->id(), value);
-      auto now = chrono::high_resolution_clock::now();
-      auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_);
-      //cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
+      if (component->cache_time_.has_value()) {
+          auto now = chrono::high_resolution_clock::now();
+          auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_.value());
+          cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
+      }
     }
   }
 
@@ -149,6 +151,8 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
    ana_.setupAnalysisContext(top, super_comp);
 
+   int components_stored = 0;
+
    for (auto vt = super_comp.varsBegin(); *vt != varsSENTINEL; vt++)
      if (ana_.isUnseenAndActive(*vt) &&
          ana_.exploreRemainingCompOf(*vt)){
@@ -159,8 +163,13 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
        auto cache_result = cache_.manageNewComponent(top, *packed_comp, true);
          if (!cache_result.has_value()) {
 
-            //component_stats[p_new_comp->num_variables()] += 1;
-            p_new_comp->cache_time_ = chrono::high_resolution_clock::now();
+            if (components_stored == 0) {
+                //component_stats[p_new_comp->num_variables()] += 1;
+                p_new_comp->cache_time_ = make_optional(chrono::high_resolution_clock::now());
+            } else {
+                p_new_comp->cache_time_ = nullopt;
+            }
+            components_stored++;
             component_stack_.push_back(p_new_comp);
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
 
@@ -171,7 +180,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
                    if (model_count > 0) {
                        assert(model_count >= 0);
                         //cout << "component with " << p_new_comp->num_variables() << " variables." << endl;
-                       cout << "model count: " << model_count << " vars: " << p_new_comp->num_variables() << endl;
+                       //cout << "model count: " << model_count << " vars: " << p_new_comp->num_variables() << endl;
                        /*if (model_count != cache_result.value()) {
                             cout << "cached model count: " << cache_result.value() << endl;
                            raise(SIGSEGV);
