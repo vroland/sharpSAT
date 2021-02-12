@@ -53,11 +53,13 @@ public:
     if (config_.perform_component_caching) {
         auto component = component_stack_[stack_comp_id];
         cache_.storeValueOf(component->id(), value);
+        /*
         if (component->cache_time_.has_value()) {
           auto now = chrono::high_resolution_clock::now();
           auto duration = chrono::duration_cast<chrono::microseconds>(now - component->cache_time_.value());
           cout << "PROF component duration: " << duration.count() << " vars: " << component->num_variables() << endl;
         }
+        */
     }
   }
 
@@ -157,6 +159,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
          if (!cache_.manageNewComponent(top, *packed_comp, true)){
 
             component_stats[p_new_comp->num_variables()] += 1;
+            /*
             if (components_stored == 0) {
                 //component_stats[p_new_comp->num_variables()] += 1;
                 p_new_comp->cache_time_ = make_optional(chrono::high_resolution_clock::now());
@@ -164,6 +167,7 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
                 p_new_comp->cache_time_ = nullopt;
             }
             components_stored++;
+            */
             component_stack_.push_back(p_new_comp);
             p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
 
@@ -201,9 +205,9 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
 
                 //cout << "gpu solve comp with " << p_new_comp->num_variables() << " vars, " << p_new_comp->numLongClauses() << " clauses. connectedness: " << connectedness_like << endl;
                //cout << "in binray: " << in_binary << " in long: " << in_long << endl;
-               if (in_long > in_binary) {
+               if (in_long * 1.5 > in_binary) {
                    auto model_count = ana_.solveComponentGPU(p_new_comp);
-                   if (model_count >= 0) {
+                   if (model_count > 0) {
                        assert(model_count >= 0);
                        cout << "component depth: " << new_comps_start_ofs << " vars: " << p_new_comp->num_variables() << "model count: "
                             << model_count << " in_binary: " << in_binary <<  " in_long: " << in_long << endl;

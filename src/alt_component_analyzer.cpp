@@ -215,9 +215,11 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
    auto long_clauses = 0;
 
+   /*
    if (search_stack_.size() < 16 || search_stack_.size() > 22) {
      return -1;
    }
+   */
 
    auto find_var_index = [&](VariableIndex var) -> int {
        // since variables seem to be ordered, binary search *could* be faster
@@ -305,7 +307,7 @@ int64_t AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
     }
 
 
-   cout << "clauses extracted: " << clauses.size() << " clauses declared: " << comp->numLongClauses() << " long: " << long_clauses << endl;
+   //cout << "clauses extracted: " << clauses.size() << " clauses declared: " << comp->numLongClauses() << " long: " << long_clauses << endl;
    unsigned mc = componentModelCount(clauses, var_index);
    //cerr << "model count: " << mc << endl;
    return mc;
