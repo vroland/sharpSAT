@@ -33,4 +33,4 @@ add_library(gpusolve_kernel STATIC src/gpusolve.cu)
 target_compile_options(gpusolve_kernel PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-gencode arch=compute_75,code=sm_75>)
 
 add_executable (sharpSAT src/main.cpp)
-target_link_libraries (sharpSAT libsharpSAT ${GMP_LIB} ${GMPXX_LIB} gpusolve_kernel) 
+target_link_libraries (sharpSAT libsharpSAT libgmp.a libgmpxx.a gpusolve_kernel -static-libgcc -static-libstdc++) 
