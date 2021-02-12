@@ -262,6 +262,7 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
                    formula.clause_offsets.push_back(formula.clause_bag.size());
                    formula.clause_bag.push_back(self_local);
                    formula.clause_bag.push_back(local * mul_sign(*lit));
+                   sort(formula.clause_bag.end() - 2, formula.clause_bag.end(), gpusat::compVars);
                    formula.clause_bag.push_back(0);
                } else {
                    // all non-active binary clauses
@@ -304,6 +305,7 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
        if (active_vars > 0) {
            assert(active_vars >= 1);
            long_clauses++;
+           sort(clause.begin(), clause.end(), gpusat::compVars);
            formula.clause_offsets.push_back(formula.clause_bag.size());
            formula.clause_bag.reserve(formula.clause_bag.size() + clause.size());
            formula.clause_bag.insert(formula.clause_bag.end(), clause.begin(), clause.end());
@@ -323,6 +325,7 @@ mpz_class AltComponentAnalyzer::solveComponentGPU(const Component* comp) {
 
    auto fitness = new gpusat::CutSetWidthFitnessFunction();
 
+   assert(formula.facts.empty());
    auto start = chrono::high_resolution_clock::now();
    auto decomp = gpusat::GPUSAT::decompose(formula, *fitness, 30);
    auto end = chrono::high_resolution_clock::now();
