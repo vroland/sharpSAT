@@ -186,6 +186,8 @@ private:
 	void print(vector<LiteralID> &vec);
 	void print(vector<unsigned> &vec);
 
+    void dumpComponent(const Component& comp);
+
 
 	void setConflictState(LiteralID litA, LiteralID litB) {
 		violated_clause.clear();

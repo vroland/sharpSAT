@@ -73,6 +73,7 @@ void Instance::compactClauses() {
   vector<LiteralID> tmp_pool = literal_pool_;
   literal_pool_.clear();
   literal_pool_.push_back(SENTINEL_LIT);
+  // clause offsets are calculated in compactVariables()
   ClauseOfs new_ofs;
   unsigned num_clauses = 0;
   for (auto ofs : clause_ofs) {
@@ -84,10 +85,13 @@ void Instance::compactClauses() {
       literal(*it).addWatchLinkTo(new_ofs);
       literal(*(it + 1)).addWatchLinkTo(new_ofs);
       num_clauses++;
+      auto new_clause_size = 0;
       for (; *it != SENTINEL_LIT; it++) {
         literal_pool_.push_back(*it);
         occurrence_lists_[*it].push_back(new_ofs);
+        new_clause_size++;
       }
+      getHeaderOf(new_ofs).set_length(new_clause_size);
       literal_pool_.push_back(SENTINEL_LIT);
     }
   }
@@ -152,6 +156,8 @@ void Instance::compactVariables() {
   }
 
   vector<ClauseOfs> clause_ofs;
+  clause_id_offsets_.clear();
+  clause_id_offsets_.push_back(SENTINEL_CL);
   clause_ofs.reserve(statistics_.num_long_clauses_);
   // clear watch links and occurrence lists
   for (auto it_lit = literal_pool_.begin(); it_lit != literal_pool_.end();
@@ -160,19 +166,27 @@ void Instance::compactVariables() {
       if (it_lit + 1 == literal_pool_.end())
         break;
       it_lit += ClauseHeader::overheadInLits();
-      clause_ofs.push_back(1 + it_lit - literal_pool_.begin());
+      ClauseOfs new_ofs = 1 + it_lit - literal_pool_.begin();
+      clause_ofs.push_back(new_ofs);
+      clause_id_offsets_.push_back(new_ofs);
     }
   }
 
+  auto cl_index = 1;
   for (auto ofs : clause_ofs) {
     literal(LiteralID(var_map[beginOf(ofs)->var()], beginOf(ofs)->sign())).addWatchLinkTo(
         ofs);
     literal(LiteralID(var_map[(beginOf(ofs) + 1)->var()],
             (beginOf(ofs) + 1)->sign())).addWatchLinkTo(ofs);
+    // Rename clause literals
+    std::cout << "adding clause " << cl_index << " with len " << getHeaderOf(ofs).length() << " at offset " << ofs << endl;
     for (auto it_lit = beginOf(ofs); *it_lit != SENTINEL_LIT; it_lit++) {
       *it_lit = LiteralID(var_map[it_lit->var()], it_lit->sign());
       occurrence_lists_[*it_lit].push_back(ofs);
+        cout << it_lit->toInt() << " ";
     }
+    cout << std::endl;
+    cl_index++;
   }
 
   literal_values_.clear();

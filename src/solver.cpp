@@ -250,6 +250,101 @@ void Solver::decideLiteral() {
 			stack_.top().remaining_components_ofs() <= comp_manager_.component_stack_size());
 }
 
+void Solver::dumpComponent(const Component& comp) {
+   unsigned var_index = 0;
+   //vector<int64_t> clauses;
+
+   auto long_clauses = 0;
+
+   vector<VariableIndex> vstack;
+   std::cout << "component variables: ";
+   for (auto it = comp.varsBegin(); *it != varsSENTINEL; it++) {
+        vstack.push_back(*it);
+        cout << *it << " ";
+   }
+   cout << endl;
+   sort(vstack.begin(), vstack.end());
+
+
+   //auto numVars = vstack.size();
+
+   for (auto it = vstack.begin(); it < vstack.end(); it++) {
+       //std::cerr << "\nvar: " << *it << std::endl;
+
+       bool truths[2] = {true, false};
+
+       // variable is not assigned?
+       //assert(isActive(*it));
+       for (auto t : truths) {
+           LiteralID self = LiteralID(*it, t);
+           for (auto lit = literals_[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
+               if (isActive(lit->var())) {
+                   // other variable must be present in current component as well
+                   assert(std::find(vstack.begin(), vstack.end(), lit->var()) != vstack.end());
+
+                   std::cout << "bin clause: " << self.toInt() << " " << lit->toInt() << endl;
+                   // FIXME: record binary clause?
+
+                   //formula.clause_offsets.push_back(formula.clause_bag.size());
+                   //formula.clause_bag.push_back(self_local);
+                   //formula.clause_bag.push_back(local * mul_sign(*lit));
+                   //sort(formula.clause_bag.end() - 2, formula.clause_bag.end(), gpusat::compVars);
+                   //formula.clause_bag.push_back(0);
+               } else {
+                   // all non-active binary clauses
+                   // must be satisifed, or component is not sound as descibed in paper.
+                   // (resolved pair variable would require self to be satisfied)
+                   assert(isSatisfied(self) || isSatisfied(*lit));
+               }
+           }
+       }
+       var_index++;
+    }
+
+    for (auto cid = comp.clsBegin(); *cid != clsSENTINEL; cid++) {
+       int active_vars = 0;
+       vector<int64_t> clause;
+       ClauseOfs ofs = clauseOfsById(*cid);
+       ClauseHeader cl_hdr = getHeaderOf(ofs);
+       std::cout << "expecting clause " << *cid << " with length " << cl_hdr.length() << " and offset " << ofs << std::endl;
+       for (auto cit = beginOf(ofs); *cit != clsSENTINEL; cit++) {
+           if (isActive(cit->var())) {
+               cout << "current var: " << cit->toInt() << endl;
+               // other variable must be present in current component as well
+               //assert(std::find(vstack.begin(), vstack.end(), cit->var()) != vstack.end());
+
+               clause.push_back(cit->toInt());
+               active_vars++;
+           // clause satisfied -> skip
+           } else if (isSatisfied(*cit)) {
+             //continue;
+             active_vars = -1;
+             cout << "clause satisfied by " << cit->toInt() << endl;
+             break;
+           } else {
+            // if clause is still active,
+            // there should not be any satisfying literal.
+            assert(isResolved(*cit));
+            clause.push_back(cit->toInt());
+           }
+       }
+
+       // clause not skipped
+       if (active_vars > 0) {
+           assert(active_vars >= 1);
+           long_clauses++;
+
+           assert(cl_hdr.length() == clause.size());
+           // record long clause
+           std::cout << "long clause: ";
+           for (auto l : clause) {
+               std::cout << l << " ";
+           }
+           std::cout << endl;
+       }
+    }
+}
+
 retStateT Solver::backtrack() {
 	assert(
 			stack_.top().remaining_components_ofs() <= comp_manager_.component_stack_size());
@@ -274,6 +369,13 @@ retStateT Solver::backtrack() {
 		if (stack_.get_decision_level() <= 0)
 			break;
 		reactivateTOS();
+
+        cout << "literal stack: ";
+        for (auto& lit : literal_stack_) {
+            cout << lit.toInt() << " ";
+        }
+        cout << endl;
+        dumpComponent(comp_manager_.getStackComponent(stack_.top().super_component()));
 
 		assert(stack_.size()>=2);
 		(stack_.end() - 2)->includeSolution(stack_.top().getTotalModelCount());

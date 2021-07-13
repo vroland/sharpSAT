@@ -40,7 +40,12 @@ public:
       return ana_.scoreOf(v);
   }
 
+  Component & getStackComponent(unsigned stack_comp_id) {
+      return *component_stack_[stack_comp_id];
+  }
+
   void cacheModelCountOf(unsigned stack_comp_id, const mpz_class &value) {
+    cout << "caching component " << stack_comp_id << " with value " << value << endl;
     if (config_.perform_component_caching)
       cache_.storeValueOf(component_stack_[stack_comp_id]->id(), value);
   }

@@ -103,6 +103,9 @@ protected:
   vector<Variable> variables_;
   LiteralIndexedVector<TriValue> literal_values_;
 
+  // maps clause ids to clause offsets
+  vector<ClauseOfs> clause_id_offsets_;
+
   void decayActivities() {
     for (auto l_it = literals_.begin(); l_it != literals_.end(); l_it++)
       l_it->activity_score_ *= 0.5;
@@ -148,7 +151,7 @@ protected:
     return true;
   }
 
-  inline ClauseIndex addClause(vector<LiteralID> &literals);
+  inline ClauseOfs addClause(vector<LiteralID> &literals);
 
   // adds a UIP Conflict Clause
   // and returns it as an Antecedent to the first
@@ -167,6 +170,16 @@ protected:
 
   Literal & literal(LiteralID lit) {
     return literals_[lit];
+  }
+
+  /// return the offset of clause with one-based index `idx`.
+  /// The indices are never explicitly assigned, but depend
+  /// on the order of clause addition.
+  inline ClauseOfs clauseOfsById(ClauseIndex idx) {
+    assert(idx >= 1);
+    assert(idx <= clause_id_offsets_.size());
+    assert(clause_id_offsets_.size() >= 1);
+    return clause_id_offsets_[idx];
   }
 
   inline bool isSatisfied(const LiteralID &lit) const {
@@ -205,7 +218,7 @@ protected:
   }
 };
 
-ClauseIndex Instance::addClause(vector<LiteralID> &literals) {
+ClauseOfs Instance::addClause(vector<LiteralID> &literals) {
   if (literals.size() == 1) {
     //TODO Deal properly with the situation that opposing unit clauses are learned
     assert(!isUnitClause(literals[0].neg()));
@@ -218,7 +231,11 @@ ClauseIndex Instance::addClause(vector<LiteralID> &literals) {
   }
   for (unsigned i = 0; i < ClauseHeader::overheadInLits(); i++)
     literal_pool_.push_back(0);
-  ClauseOfs cl_ofs = literal_pool_.size();
+  const ClauseOfs cl_ofs = literal_pool_.size();
+  if (clause_id_offsets_.empty()) {
+      clause_id_offsets_.push_back(SENTINEL_CL);
+  }
+  clause_id_offsets_.push_back(cl_ofs);
 
   for (auto l : literals) {
     literal_pool_.push_back(l);
@@ -228,7 +245,16 @@ ClauseIndex Instance::addClause(vector<LiteralID> &literals) {
   literal_pool_.push_back(SENTINEL_LIT);
   literal(literals[0]).addWatchLinkTo(cl_ofs);
   literal(literals[1]).addWatchLinkTo(cl_ofs);
+  // CAREFUL: This may be destroyed again after preprocessing
   getHeaderOf(cl_ofs).set_creation_time(statistics_.num_conflicts_);
+  getHeaderOf(cl_ofs).set_length(literals.size());
+  //std::cout << "adding clause " << clause_id_offsets_.size() << " with len " <<
+  //getHeaderOf(cl_ofs).length() << " at offset " << cl_ofs << endl;
+  //for (auto l : literals) {
+  //    cout << l.var() << " (" << l.raw() << ") ";
+  //}
+  //cout << std::endl;
+  //assert(false);
   return cl_ofs;
 }
 
