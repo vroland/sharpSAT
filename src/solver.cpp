@@ -5,6 +5,8 @@
  *      Author: marc
  */
 #include "solver.h"
+#include <asm-generic/errno-base.h>
+#include <cstdint>
 #include <deque>
 
 #include <algorithm>
@@ -38,14 +40,14 @@ timeval StopWatch::getElapsedTime() {
 
 void Solver::print(vector<LiteralID> &vec) {
 	for (auto l : vec)
-		cout << l.toInt() << " ";
-	cout << endl;
+		cerr << l.toInt() << " ";
+	cerr << endl;
 }
 
 void Solver::print(vector<unsigned> &vec) {
 	for (auto l : vec)
-		cout << l << " ";
-	cout << endl;
+		cerr << l << " ";
+	cerr << endl;
 }
 
 bool Solver::simplePreProcess() {
@@ -136,14 +138,18 @@ void Solver::solve(const string &file_name) {
 	initStack(num_variables());
 
 	if (!config_.quiet) {
-		cout << "Solving " << file_name << endl;
+		cerr << "Solving " << file_name << endl;
 		statistics_.printShortFormulaInfo();
 	}
 	if (!config_.quiet)
-		cout << endl << "Preprocessing .." << flush;
+		cerr << endl << "Preprocessing .." << flush;
 	bool notfoundUNSAT = simplePreProcess();
 	if (!config_.quiet)
-		cout << " DONE" << endl;
+		cerr << " DONE" << endl;
+
+    // at this point, no clauses where learned,
+    // so no filtering necessary.
+    dumpClauses();
 
 	if (notfoundUNSAT) {
 
@@ -166,7 +172,7 @@ void Solver::solve(const string &file_name) {
 	} else {
 		statistics_.exit_state_ = SUCCESS;
 		statistics_.set_final_solution_count(0.0);
-		cout << endl << " FOUND UNSAT DURING PREPROCESSING " << endl;
+		cerr << endl << " FOUND UNSAT DURING PREPROCESSING " << endl;
 	}
 
 	stopwatch_.stop();
@@ -198,6 +204,7 @@ SOLVER_StateT Solver::countSAT() {
 				break;
 		}
 
+        cout << "c component done, backtracking. previous state: " << state << endl;
 		state = backtrack();
 		if (state == EXIT)
 			return SUCCESS;
@@ -250,27 +257,51 @@ void Solver::decideLiteral() {
 			stack_.top().remaining_components_ofs() <= comp_manager_.component_stack_size());
 }
 
-void Solver::dumpComponent(const Component& comp) {
+void Solver::dumpClauses() {
+    for (ClauseIndex c_id = 1; c_id < clause_id_offsets_.size(); c_id++) {
+        const ClauseOfs ofs = clauseOfsById(c_id);
+        vector<int64_t> clause;
+        for (auto it_lit = beginOf(ofs); *it_lit != SENTINEL_LIT; it_lit++) {
+            clause.push_back(it_lit->toInt());
+        }
+        printTraceLine("f", c_id, 0, clause);
+    }
+
+    for (VariableIndex var_idx = 1; var_idx < variables_.size(); var_idx++) {
+       bool truths[2] = {true, false};
+       for (auto t : truths) {
+           LiteralID self = LiteralID(var_idx, t);
+           for (auto lit = literals_[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
+               // binary links are symmetric
+               if (lit->var() > var_idx) {
+                   continue;
+               }
+               vector<int64_t> bin_clause;
+               bin_clause.push_back(self.toInt());
+               bin_clause.push_back(lit->toInt());
+               printTraceLine("f", binClauseId(self, *lit), 0, bin_clause);
+           }
+       }
+    }
+}
+
+void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) {
    unsigned var_index = 0;
    //vector<int64_t> clauses;
 
    auto long_clauses = 0;
 
    vector<VariableIndex> vstack;
-   std::cout << "component variables: ";
    for (auto it = comp.varsBegin(); *it != varsSENTINEL; it++) {
         vstack.push_back(*it);
-        cout << *it << " ";
    }
-   cout << endl;
    sort(vstack.begin(), vstack.end());
+   printTraceLine("cv", comp.id(), 0, vstack);
 
 
-   //auto numVars = vstack.size();
+   vector<ClauseIndex> clauses_used;
 
    for (auto it = vstack.begin(); it < vstack.end(); it++) {
-       //std::cerr << "\nvar: " << *it << std::endl;
-
        bool truths[2] = {true, false};
 
        // variable is not assigned?
@@ -278,23 +309,24 @@ void Solver::dumpComponent(const Component& comp) {
        for (auto t : truths) {
            LiteralID self = LiteralID(*it, t);
            for (auto lit = literals_[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
+               // binary links are symmetric
+               if (lit->var() > *it) {
+                   continue;
+               }
                if (isActive(lit->var())) {
                    // other variable must be present in current component as well
                    assert(std::find(vstack.begin(), vstack.end(), lit->var()) != vstack.end());
 
-                   std::cout << "bin clause: " << self.toInt() << " " << lit->toInt() << endl;
-                   // FIXME: record binary clause?
-
-                   //formula.clause_offsets.push_back(formula.clause_bag.size());
-                   //formula.clause_bag.push_back(self_local);
-                   //formula.clause_bag.push_back(local * mul_sign(*lit));
-                   //sort(formula.clause_bag.end() - 2, formula.clause_bag.end(), gpusat::compVars);
-                   //formula.clause_bag.push_back(0);
+                   clauses_used.push_back(binClauseId(self, *lit));
                } else {
                    // all non-active binary clauses
                    // must be satisifed, or component is not sound as descibed in paper.
                    // (resolved pair variable would require self to be satisfied)
-                   assert(isSatisfied(self) || isSatisfied(*lit));
+                   if (isActive(self)) {
+                       assert(std::find(vstack.begin(), vstack.end(), self.var()) != vstack.end());
+                   } else {
+                       assert(isSatisfied(self) || isSatisfied(*lit));
+                   }
                }
            }
        }
@@ -306,21 +338,19 @@ void Solver::dumpComponent(const Component& comp) {
        vector<int64_t> clause;
        ClauseOfs ofs = clauseOfsById(*cid);
        ClauseHeader cl_hdr = getHeaderOf(ofs);
-       std::cout << "expecting clause " << *cid << " with length " << cl_hdr.length() << " and offset " << ofs << std::endl;
+       clauses_used.push_back(*cid);
        for (auto cit = beginOf(ofs); *cit != clsSENTINEL; cit++) {
            if (isActive(cit->var())) {
-               cout << "current var: " << cit->toInt() << endl;
                // other variable must be present in current component as well
-               //assert(std::find(vstack.begin(), vstack.end(), cit->var()) != vstack.end());
+               assert(std::find(vstack.begin(), vstack.end(), cit->var()) != vstack.end());
 
                clause.push_back(cit->toInt());
                active_vars++;
            // clause satisfied -> skip
            } else if (isSatisfied(*cit)) {
-             //continue;
-             active_vars = -1;
-             cout << "clause satisfied by " << cit->toInt() << endl;
-             break;
+             // this should not happen, as these clauses should not be
+             // stored in component.
+             assert(false);
            } else {
             // if clause is still active,
             // there should not be any satisfying literal.
@@ -336,23 +366,37 @@ void Solver::dumpComponent(const Component& comp) {
 
            assert(cl_hdr.length() == clause.size());
            // record long clause
-           std::cout << "long clause: ";
-           for (auto l : clause) {
-               std::cout << l << " ";
-           }
-           std::cout << endl;
+           //std::cout << "long clause: ";
+           //for (auto l : clause) {
+           //    std::cout << l << " ";
+           //}
+           //std::cout << endl;
        }
     }
+
+    printTraceLine("cd", comp.id(), 0, clauses_used);
+    vector<int64_t> empty;
+    printTraceLine("p", comp.id(), model_count, empty);
 }
 
 retStateT Solver::backtrack() {
+    cout << "c lvl: " << stack_.size() << " literal stack: ";
+    for (auto& lit : literal_stack_) {
+        cout << lit.toInt() << " ";
+    }
+    cout << endl;
 	assert(
 			stack_.top().remaining_components_ofs() <= comp_manager_.component_stack_size());
 	do {
 		if (stack_.top().branch_found_unsat())
 			comp_manager_.removeAllCachePollutionsOf(stack_.top());
-		else if (stack_.top().anotherCompProcessible())
+		else if (stack_.top().anotherCompProcessible()) {
+            cout << "c other processible -> PROCESS_COMPONENT" << endl;
 			return PROCESS_COMPONENT;
+        }
+
+        // before backtracking / switching branches ouput model for current component
+        dumpCurrentModel();
 
 		if (!stack_.top().isSecondBranch()) {
 			LiteralID aLit = TOS_decLit();
@@ -362,6 +406,7 @@ retStateT Solver::backtrack() {
 			setLiteralIfFree(aLit.neg(), NOT_A_CLAUSE);
 			return RESOLVED;
 		}
+
 		// OTHERWISE:  backtrack further
 		comp_manager_.cacheModelCountOf(stack_.top().super_component(),
 				stack_.top().getTotalModelCount());
@@ -370,12 +415,7 @@ retStateT Solver::backtrack() {
 			break;
 		reactivateTOS();
 
-        cout << "literal stack: ";
-        for (auto& lit : literal_stack_) {
-            cout << lit.toInt() << " ";
-        }
-        cout << endl;
-        dumpComponent(comp_manager_.getStackComponent(stack_.top().super_component()));
+        dumpComponent(comp_manager_.getStackComponent(stack_.top().super_component()), stack_.top().getTotalModelCount());
 
 		assert(stack_.size()>=2);
 		(stack_.end() - 2)->includeSolution(stack_.top().getTotalModelCount());
@@ -413,7 +453,7 @@ retStateT Solver::resolveConflict() {
 
 	// DEBUG
 	if (uip_clauses_.back().size() == 0)
-		cout << " EMPTY CLAUSE FOUND" << endl;
+		cerr << " EMPTY CLAUSE FOUND" << endl;
 	// END DEBUG
 
 	stack_.top().mark_branch_unsat();
@@ -663,7 +703,7 @@ bool Solver::implicitBCP() {
 							it != uip_clauses_.rend(); it++) {
 						// DEBUG
 						if (it->size() == 0)
-							cout << "EMPTY CLAUSE FOUND" << endl;
+							cerr << "EMPTY CLAUSE FOUND" << endl;
 						// END DEBUG
 						setLiteralIfFree(it->front(),
 								addUIPConflictClause(*it));
@@ -940,33 +980,32 @@ void Solver::printOnlineStats() {
 	if (config_.quiet)
 		return;
 
-	cout << endl;
-	cout << "time elapsed: " << stopwatch_.getElapsedSeconds() << "s" << endl;
+	cerr << endl;
+	cerr << "time elapsed: " << stopwatch_.getElapsedSeconds() << "s" << endl;
 	if(config_.verbose) {
-	  cout << "conflict clauses (all / bin / unit) \t";
-	  cout << num_conflict_clauses();
-	  cout << "/" << statistics_.num_binary_conflict_clauses_ << "/"
+	  cerr << "conflict clauses (all / bin / unit) \t";
+	  cerr << num_conflict_clauses();
+	  cerr << "/" << statistics_.num_binary_conflict_clauses_ << "/"
 	      << unit_clauses_.size() << endl;
-	  cout << "failed literals found by implicit BCP \t "
+	  cerr << "failed literals found by implicit BCP \t "
 	      << statistics_.num_failed_literals_detected_ << endl;
 	  ;
 
-	  cout << "implicit BCP miss rate \t "
+	  cerr << "implicit BCP miss rate \t "
 	      << statistics_.implicitBCP_miss_rate() * 100 << "%";
-	  cout << endl;
+	  cerr << endl;
 
 	  comp_manager_.gatherStatistics();
 
-	  cout << "cache size " << statistics_.cache_MB_memory_usage()	<< "MB" << endl;
-	  cout << "components (stored / hits) \t\t"
+	  cerr << "cache size " << statistics_.cache_MB_memory_usage()	<< "MB" << endl;
+	  cerr << "components (stored / hits) \t\t"
 	      << statistics_.cached_component_count() << "/"
 	      << statistics_.cache_hits() << endl;
-	  cout << "avg. variable count (stored / hits) \t"
+	  cerr << "avg. variable count (stored / hits) \t"
 	      << statistics_.getAvgComponentSize() << "/"
 	      << statistics_.getAvgCacheHitSize();
-	  cout << endl;
-	  cout << "cache miss rate " << statistics_.cache_miss_rate() * 100 << "%"
+	  cerr << endl;
+	  cerr << "cache miss rate " << statistics_.cache_miss_rate() * 100 << "%"
 	      << endl;
 	}
 }
-

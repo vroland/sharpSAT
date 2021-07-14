@@ -9,6 +9,7 @@
 #define STACK_H_
 
 #include <gmpxx.h>
+#include <iostream>
 
 class StackLevel {
   /// active Component, once initialized, it should not change
@@ -91,6 +92,7 @@ public:
     return literal_stack_ofs_;
   }
   void includeSolution(const mpz_class &solutions) {
+    std::cout << "c include " << solutions << " in " << super_component_ << std::endl;
     if (branch_found_unsat_[active_branch_]) {
       assert(branch_model_count_[active_branch_] == 0);
       return;
@@ -104,6 +106,7 @@ public:
 
   }
   void includeSolution(unsigned solutions) {
+    std::cout << "c include " << solutions << " in " << super_component_ << std::endl;
     if (branch_found_unsat_[active_branch_]) {
       assert(branch_model_count_[active_branch_] == 0);
       return;

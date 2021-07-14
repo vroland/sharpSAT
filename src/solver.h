@@ -9,6 +9,7 @@
 #define SOLVER_H_
 
 
+#include "primitive_types.h"
 #include "statistics.h"
 #include "instance.h"
 #include "component_management.h"
@@ -17,7 +18,10 @@
 
 #include "solver_config.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <sys/time.h>
+#include <vector>
 
 enum retStateT {
 	EXIT, RESOLVED, PROCESS_COMPONENT, BACKTRACK
@@ -186,7 +190,39 @@ private:
 	void print(vector<LiteralID> &vec);
 	void print(vector<unsigned> &vec);
 
-    void dumpComponent(const Component& comp);
+    void dumpComponent(const Component& comp, const mpz_class& model_count);
+    void dumpClauses();
+    void dumpCurrentModel() {
+        vector<int64_t> model;
+		for (auto it = TOSLiteralsBegin(); it != literal_stack_.end(); it++) {
+            model.push_back(it->toInt());
+        }
+
+        if (comp_manager_.currentTrivialComponents().empty()) {
+            printTraceLine("m", stack_.top().super_component(), 0, model);
+        // output all combinations of trivial components
+        } else {
+            auto trivial_vars = comp_manager_.currentTrivialComponents();
+            for (size_t idx=0; idx < (1u << trivial_vars.size()); idx++) {
+                vector<int64_t> prefix;
+                for (size_t var_idx = 0; var_idx < trivial_vars.size(); var_idx++) {
+                    bool truth = (idx & (1u << var_idx)) > 0;
+                    prefix.push_back(LiteralID(trivial_vars[var_idx], truth).toInt());
+                }
+                prefix.insert(prefix.end(), model.begin(), model.end());
+                printTraceLine("m", stack_.top().super_component(), 0, prefix);
+            }
+        }
+    }
+
+    template <class T>
+    void printTraceLine(const char* tag, CacheEntryID comp_id, const mpz_class count, vector<T>& data) {
+        std::cout << tag << " " << comp_id << " " << count << " ";
+        for (auto elem : data) {
+            std::cout << elem << " ";
+        }
+        std::cout << 0 << std::endl;
+    }
 
 
 	void setConflictState(LiteralID litA, LiteralID litB) {

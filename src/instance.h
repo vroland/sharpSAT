@@ -190,6 +190,11 @@ protected:
     return literal_values_[lit] == F_TRI;
   }
 
+  // generates a unique binary clause id for some pair of literals.
+  int64_t binClauseId(LiteralID& l1, LiteralID& l2) {
+     return 2 * statistics_.num_original_binary_clauses_ * (2 * l1.var() + l1.sign()) + l2.var() * 2 + l2.sign() + statistics_.num_original_clauses_;
+  }
+
   bool isActive(LiteralID lit) const {
     return literal_values_[lit] == X_TRI;
   }
@@ -248,13 +253,6 @@ ClauseOfs Instance::addClause(vector<LiteralID> &literals) {
   // CAREFUL: This may be destroyed again after preprocessing
   getHeaderOf(cl_ofs).set_creation_time(statistics_.num_conflicts_);
   getHeaderOf(cl_ofs).set_length(literals.size());
-  //std::cout << "adding clause " << clause_id_offsets_.size() << " with len " <<
-  //getHeaderOf(cl_ofs).length() << " at offset " << cl_ofs << endl;
-  //for (auto l : literals) {
-  //    cout << l.var() << " (" << l.raw() << ") ";
-  //}
-  //cout << std::endl;
-  //assert(false);
   return cl_ofs;
 }
 

@@ -190,13 +190,13 @@ public:
   void printShort();
 
   void printShortFormulaInfo() {
-    cout << "variables (all/used/free): \t";
-    cout << num_variables_ << "/" << num_used_variables_ << "/";
-    cout << num_variables_ - num_used_variables_ << endl;
+    cerr << "variables (all/used/free): \t";
+    cerr << num_variables_ << "/" << num_used_variables_ << "/";
+    cerr << num_variables_ - num_used_variables_ << endl;
 
-    cout << "clauses (all/long/binary/unit): ";
-    cout << num_clauses() << "/" << num_long_clauses_;
-    cout << "/" << num_binary_clauses_ << "/" << num_unit_clauses_ << endl;
+    cerr << "clauses (all/long/binary/unit): ";
+    cerr << num_clauses() << "/" << num_long_clauses_;
+    cerr << "/" << num_binary_clauses_ << "/" << num_unit_clauses_ << endl;
   }
   unsigned getTime() {
     return num_decisions_;

@@ -45,7 +45,6 @@ public:
   }
 
   void cacheModelCountOf(unsigned stack_comp_id, const mpz_class &value) {
-    cout << "caching component " << stack_comp_id << " with value " << value << endl;
     if (config_.perform_component_caching)
       cache_.storeValueOf(component_stack_[stack_comp_id]->id(), value);
   }
@@ -92,6 +91,12 @@ public:
 
   void removeAllCachePollutionsOf(StackLevel &top);
 
+  // returns a list of variables forming trivial components,
+  // found by the last remaining component search
+  vector<VariableIndex>& currentTrivialComponents() {
+        return satisfiable_trivial_components_;
+  }
+
 private:
 
   SolverConfiguration &config_;
@@ -100,6 +105,9 @@ private:
   vector<Component *> component_stack_;
   ComponentCache cache_;
   ComponentAnalyzer ana_;
+  // Store a list of satisfiable trivial components (size 1)
+  // found in the last remaining component search.
+  vector<VariableIndex> satisfiable_trivial_components_;
 };
 
 
@@ -133,22 +141,28 @@ void ComponentManager::recordRemainingCompsFor(StackLevel &top) {
    unsigned new_comps_start_ofs = component_stack_.size();
 
    ana_.setupAnalysisContext(top, super_comp);
+   satisfiable_trivial_components_.clear();
 
-   for (auto vt = super_comp.varsBegin(); *vt != varsSENTINEL; vt++)
-     if (ana_.isUnseenAndActive(*vt) &&
-         ana_.exploreRemainingCompOf(*vt)){
-
-       Component *p_new_comp = ana_.makeComponentFromArcheType();
-       CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
-         if (!cache_.manageNewComponent(top, *packed_comp)){
-            component_stack_.push_back(p_new_comp);
-            p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
-         }
-         else {
-           delete packed_comp;
-           delete p_new_comp;
-         }
+   for (auto vt = super_comp.varsBegin(); *vt != varsSENTINEL; vt++) {
+     if (ana_.isUnseenAndActive(*vt)) {
+       // is component non-trivial?
+       if (ana_.exploreRemainingCompOf(*vt)) {
+           Component *p_new_comp = ana_.makeComponentFromArcheType();
+           CacheableComponent *packed_comp = new CacheableComponent(ana_.getArchetype().current_comp_for_caching_);
+             if (!cache_.manageNewComponent(top, *packed_comp)){
+                component_stack_.push_back(p_new_comp);
+                p_new_comp->set_id(cache_.storeAsEntry(*packed_comp, super_comp.id()));
+             }
+             else {
+               delete packed_comp;
+               delete p_new_comp;
+             }
+       } else {
+         satisfiable_trivial_components_.push_back(*vt);
+       }
      }
+   }
+
 
    top.set_unprocessed_components_end(component_stack_.size());
    sortComponentStackRange(new_comps_start_ofs, component_stack_.size());

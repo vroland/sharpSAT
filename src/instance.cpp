@@ -172,21 +172,16 @@ void Instance::compactVariables() {
     }
   }
 
-  auto cl_index = 1;
   for (auto ofs : clause_ofs) {
     literal(LiteralID(var_map[beginOf(ofs)->var()], beginOf(ofs)->sign())).addWatchLinkTo(
         ofs);
     literal(LiteralID(var_map[(beginOf(ofs) + 1)->var()],
             (beginOf(ofs) + 1)->sign())).addWatchLinkTo(ofs);
     // Rename clause literals
-    std::cout << "adding clause " << cl_index << " with len " << getHeaderOf(ofs).length() << " at offset " << ofs << endl;
     for (auto it_lit = beginOf(ofs); *it_lit != SENTINEL_LIT; it_lit++) {
       *it_lit = LiteralID(var_map[it_lit->var()], it_lit->sign());
       occurrence_lists_[*it_lit].push_back(ofs);
-        cout << it_lit->toInt() << " ";
     }
-    cout << std::endl;
-    cl_index++;
   }
 
   literal_values_.clear();
