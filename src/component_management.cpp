@@ -20,7 +20,7 @@ void ComponentManager::initialize(LiteralIndexedVector<Literal> & literals,
   component_stack_.push_back(new Component());
   assert(component_stack_.size() == 2);
   // inital component is a dummy component, defining clause ids
-  cout << "creating root component with " << ana_.max_variable_id() << " vars and " << ana_.max_clause_id() << "clauses." << std::endl;
+  cerr << "creating root component with " << ana_.max_variable_id() << " vars and " << ana_.max_clause_id() << "clauses." << std::endl;
   component_stack_.back()->createAsDummyComponent(ana_.max_variable_id(),
       ana_.max_clause_id());
 

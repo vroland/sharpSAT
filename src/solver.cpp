@@ -224,8 +224,10 @@ void Solver::decideLiteral() {
 	// establish another decision stack level
 	stack_.push_back(
 			StackLevel(stack_.top().currentRemainingComponent(),
+                    stack_.issueComponentSequenceNumber(),
 					literal_stack_.size(),
 					comp_manager_.component_stack_size()));
+
 	float max_score = -1;
 	float score;
 	unsigned max_score_var = 0;
@@ -285,9 +287,8 @@ void Solver::dumpClauses() {
     }
 }
 
-void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) {
-   unsigned var_index = 0;
-   //vector<int64_t> clauses;
+void Solver::dumpCurrentComponent() {
+   auto comp = comp_manager_.getStackComponent(stack_.top().super_component());
 
    auto long_clauses = 0;
 
@@ -296,7 +297,7 @@ void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) 
         vstack.push_back(*it);
    }
    sort(vstack.begin(), vstack.end());
-   printTraceLine("cv", comp.id(), 0, vstack);
+   printTraceLine("cv", stack_.top().superCompSeqNumber(), 0, vstack);
 
 
    vector<ClauseIndex> clauses_used;
@@ -309,8 +310,8 @@ void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) 
        for (auto t : truths) {
            LiteralID self = LiteralID(*it, t);
            for (auto lit = literals_[self].binary_links_.begin(); *lit != SENTINEL_LIT; lit++) {
-               // binary links are symmetric
-               if (lit->var() > *it) {
+               // binary links are symmetric and not learned
+               if (lit->var() > *it || !literals_[self].hasOriginalBinaryLinkTo(*lit)) {
                    continue;
                }
                if (isActive(lit->var())) {
@@ -330,7 +331,6 @@ void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) 
                }
            }
        }
-       var_index++;
     }
 
     for (auto cid = comp.clsBegin(); *cid != clsSENTINEL; cid++) {
@@ -374,24 +374,23 @@ void Solver::dumpComponent(const Component& comp, const mpz_class& model_count) 
        }
     }
 
-    printTraceLine("cd", comp.id(), 0, clauses_used);
+    printTraceLine("cd", stack_.top().superCompSeqNumber(), 0, clauses_used);
     vector<int64_t> empty;
-    printTraceLine("p", comp.id(), model_count, empty);
+    printTraceLine("p", stack_.top().superCompSeqNumber(), stack_.top().getTotalModelCount(), empty);
 }
 
 retStateT Solver::backtrack() {
-    cout << "c lvl: " << stack_.size() << " literal stack: ";
-    for (auto& lit : literal_stack_) {
-        cout << lit.toInt() << " ";
-    }
-    cout << endl;
+    //cout << "c lvl: " << stack_.size() << " literal stack: ";
+    //for (auto& lit : literal_stack_) {
+    //    cout << lit.toInt() << " ";
+    //}
+    //cout << endl;
 	assert(
 			stack_.top().remaining_components_ofs() <= comp_manager_.component_stack_size());
 	do {
 		if (stack_.top().branch_found_unsat())
 			comp_manager_.removeAllCachePollutionsOf(stack_.top());
 		else if (stack_.top().anotherCompProcessible()) {
-            cout << "c other processible -> PROCESS_COMPONENT" << endl;
 			return PROCESS_COMPONENT;
         }
 
@@ -415,7 +414,7 @@ retStateT Solver::backtrack() {
 			break;
 		reactivateTOS();
 
-        dumpComponent(comp_manager_.getStackComponent(stack_.top().super_component()), stack_.top().getTotalModelCount());
+        dumpCurrentComponent();
 
 		assert(stack_.size()>=2);
 		(stack_.end() - 2)->includeSolution(stack_.top().getTotalModelCount());

@@ -151,14 +151,14 @@ protected:
     return true;
   }
 
-  inline ClauseOfs addClause(vector<LiteralID> &literals);
+  inline ClauseOfs addClause(vector<LiteralID> &literals, bool learned);
 
   // adds a UIP Conflict Clause
   // and returns it as an Antecedent to the first
   // literal stored in literals
   inline Antecedent addUIPConflictClause(vector<LiteralID> &literals);
 
-  inline bool addBinaryClause(LiteralID litA, LiteralID litB);
+  inline bool addBinaryClause(LiteralID litA, LiteralID litB, bool learned);
 
   /////////////////////////////////////////////////////////
   // BEGIN access to variables, literals, clauses
@@ -223,7 +223,7 @@ protected:
   }
 };
 
-ClauseOfs Instance::addClause(vector<LiteralID> &literals) {
+ClauseOfs Instance::addClause(vector<LiteralID> &literals, bool learned) {
   if (literals.size() == 1) {
     //TODO Deal properly with the situation that opposing unit clauses are learned
     assert(!isUnitClause(literals[0].neg()));
@@ -231,7 +231,7 @@ ClauseOfs Instance::addClause(vector<LiteralID> &literals) {
     return 0;
   }
   if (literals.size() == 2) {
-    addBinaryClause(literals[0], literals[1]);
+    addBinaryClause(literals[0], literals[1], learned);
     return 0;
   }
   for (unsigned i = 0; i < ClauseHeader::overheadInLits(); i++)
@@ -260,7 +260,7 @@ ClauseOfs Instance::addClause(vector<LiteralID> &literals) {
 Antecedent Instance::addUIPConflictClause(vector<LiteralID> &literals) {
     Antecedent ante(NOT_A_CLAUSE);
     statistics_.num_clauses_learned_++;
-    ClauseOfs cl_ofs = addClause(literals);
+    ClauseOfs cl_ofs = addClause(literals, true);
     if (cl_ofs != 0) {
       conflict_clauses_.push_back(cl_ofs);
       getHeaderOf(cl_ofs).set_length(literals.size());
@@ -273,11 +273,11 @@ Antecedent Instance::addUIPConflictClause(vector<LiteralID> &literals) {
     return ante;
   }
 
-bool Instance::addBinaryClause(LiteralID litA, LiteralID litB) {
+bool Instance::addBinaryClause(LiteralID litA, LiteralID litB, bool learned) {
    if (literal(litA).hasBinaryLinkTo(litB))
      return false;
-   literal(litA).addBinLinkTo(litB);
-   literal(litB).addBinLinkTo(litA);
+   literal(litA).addBinLinkTo(litB, learned);
+   literal(litB).addBinLinkTo(litA, learned);
    literal(litA).increaseActivity();
    literal(litB).increaseActivity();
    return true;

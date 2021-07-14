@@ -14,6 +14,10 @@
 class StackLevel {
   /// active Component, once initialized, it should not change
   const unsigned super_component_ = 0;
+
+  /// A unique sequence number assigned to the active component
+  const uint64_t super_comp_sequence_number = 0;
+
   // branch
   bool active_branch_ = false;
 
@@ -39,6 +43,10 @@ class StackLevel {
   // in [unprocessed_components_end_, component_stack.size())
   unsigned unprocessed_components_end_ = 0;
 public:
+  // unique sequence number of the current super_component.
+  uint64_t superCompSeqNumber() {
+    return super_comp_sequence_number;
+  }
 
   bool hasUnprocessedComponents() {
     assert(unprocessed_components_end_ >= remaining_components_ofs_);
@@ -63,12 +71,14 @@ public:
     assert(remaining_components_ofs_ <= unprocessed_components_end_);
   }
 
-  StackLevel(unsigned super_comp, unsigned lit_stack_ofs,
-      unsigned comp_stack_ofs) :
+  StackLevel(unsigned super_comp, uint64_t component_sequence_number,
+      unsigned lit_stack_ofs, unsigned comp_stack_ofs) :
       super_component_(super_comp),
+      super_comp_sequence_number(component_sequence_number),
       literal_stack_ofs_(lit_stack_ofs),
       remaining_components_ofs_(comp_stack_ofs),
       unprocessed_components_end_(comp_stack_ofs) {
+
     assert(super_comp < comp_stack_ofs);
   }
 
@@ -92,7 +102,6 @@ public:
     return literal_stack_ofs_;
   }
   void includeSolution(const mpz_class &solutions) {
-    std::cout << "c include " << solutions << " in " << super_component_ << std::endl;
     if (branch_found_unsat_[active_branch_]) {
       assert(branch_model_count_[active_branch_] == 0);
       return;
@@ -106,7 +115,6 @@ public:
 
   }
   void includeSolution(unsigned solutions) {
-    std::cout << "c include " << solutions << " in " << super_component_ << std::endl;
     if (branch_found_unsat_[active_branch_]) {
       assert(branch_model_count_[active_branch_] == 0);
       return;
@@ -140,6 +148,7 @@ public:
 
 class DecisionStack: public vector<StackLevel> {
   unsigned int failed_literal_test_active = 0;
+  uint64_t component_sequence_number = 0;
 public:
 
   //begin for implicit BCP
@@ -150,6 +159,11 @@ public:
     failed_literal_test_active = false;
   }
   //end for implicit BCP
+
+  uint64_t issueComponentSequenceNumber() {
+    component_sequence_number++;
+    return component_sequence_number;
+  }
 
   StackLevel &top() {
     assert(size() > 0);

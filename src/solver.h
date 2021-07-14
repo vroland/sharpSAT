@@ -190,7 +190,7 @@ private:
 	void print(vector<LiteralID> &vec);
 	void print(vector<unsigned> &vec);
 
-    void dumpComponent(const Component& comp, const mpz_class& model_count);
+    void dumpCurrentComponent();
     void dumpClauses();
     void dumpCurrentModel() {
         vector<int64_t> model;
@@ -199,7 +199,7 @@ private:
         }
 
         if (comp_manager_.currentTrivialComponents().empty()) {
-            printTraceLine("m", stack_.top().super_component(), 0, model);
+            printTraceLine("m", stack_.top().superCompSeqNumber(), 0, model);
         // output all combinations of trivial components
         } else {
             auto trivial_vars = comp_manager_.currentTrivialComponents();
@@ -210,7 +210,7 @@ private:
                     prefix.push_back(LiteralID(trivial_vars[var_idx], truth).toInt());
                 }
                 prefix.insert(prefix.end(), model.begin(), model.end());
-                printTraceLine("m", stack_.top().super_component(), 0, prefix);
+                printTraceLine("m", stack_.top().superCompSeqNumber(), 0, prefix);
             }
         }
     }
@@ -247,7 +247,7 @@ private:
 		literal_stack_.clear();
 		literal_stack_.reserve(resSize);
 		// initialize the stack to contain at least level zero
-		stack_.push_back(StackLevel(1, 0, 2));
+		stack_.push_back(StackLevel(1, stack_.issueComponentSequenceNumber(), 0, 2));
 		stack_.back().changeBranch();
 	}
 

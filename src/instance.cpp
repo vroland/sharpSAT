@@ -41,7 +41,7 @@ void Instance::cleanClause(ClauseOfs cl_ofs) {
     *beginOf(cl_ofs) = SENTINEL_LIT;
     // if it has become binary, transform it to binary and delete it
   } else if (length == 2) {
-    addBinaryClause(*beginOf(cl_ofs), *(beginOf(cl_ofs) + 1));
+    addBinaryClause(*beginOf(cl_ofs), *(beginOf(cl_ofs) + 1), false);
     *beginOf(cl_ofs) = SENTINEL_LIT;
   }
 }
@@ -149,7 +149,7 @@ void Instance::compactVariables() {
       for (auto it = _tmp_bin_links[l].begin(); *it != SENTINEL_LIT; it++) {
         assert(var_map[it->var()] != 0);
         literals_[newlit].addBinLinkTo(
-            LiteralID(var_map[it->var()], it->sign()));
+            LiteralID(var_map[it->var()], it->sign()), false);
       }
       bin_links += literals_[newlit].binary_links_.size() - 1;
     }
@@ -362,7 +362,7 @@ bool Instance::createfromFile(const string &file_name) {
         assert(!literals.empty());
         clauses_added++;
         statistics_.incorporateClauseData(literals);
-        ClauseOfs cl_ofs = addClause(literals);
+        ClauseOfs cl_ofs = addClause(literals, false);
         if (literals.size() >= 3)
           for (auto l : literals)
             occurrence_lists_[l].push_back(cl_ofs);

@@ -84,6 +84,7 @@ static const LiteralID NOT_A_LIT(0, false);
 class Literal {
 public:
   vector<LiteralID> binary_links_ = vector<LiteralID>(1,SENTINEL_LIT);
+  vector<bool> is_link_learned;
   vector<ClauseOfs> watch_list_ = vector<ClauseOfs>(1,SENTINEL_CL);
   float activity_score_ = 0.0f;
 
@@ -112,14 +113,25 @@ public:
     watch_list_.push_back(clause_ofs);
   }
 
-  void addBinLinkTo(LiteralID lit) {
+  void addBinLinkTo(LiteralID lit, bool learned) {
     binary_links_.back() = lit;
     binary_links_.push_back(SENTINEL_LIT);
+    is_link_learned.push_back(learned);
   }
 
   void resetWatchList(){
         watch_list_.clear();
         watch_list_.push_back(SENTINEL_CL);
+  }
+
+  // has a non-learned binary link to lit
+  bool hasOriginalBinaryLinkTo(LiteralID lit) {
+      for (size_t i = 0; i < binary_links_.size(); i++) {
+        if (lit == binary_links_[i] && !is_link_learned[i]) {
+            return true;
+        }
+      }
+      return false;
   }
 
   bool hasBinaryLinkTo(LiteralID lit) {

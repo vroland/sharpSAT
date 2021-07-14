@@ -55,7 +55,7 @@ ComponentCache::ComponentCache(DataAndStatistics &statistics) :
 
 void ComponentCache::init(Component &super_comp) {
 
-    cout << sizeof(CacheableComponent) << " " << sizeof(mpz_class) << endl;
+    cerr << sizeof(CacheableComponent) << " " << sizeof(mpz_class) << endl;
     CacheableComponent &packed_super_comp = *new CacheableComponent(super_comp);
 	my_time_ = 1;
 
@@ -77,11 +77,11 @@ void ComponentCache::init(Component &super_comp) {
 	}
 
 	if (statistics_.maximum_cache_size_bytes_ > free_ram) {
-		cout << endl <<" WARNING: Maximum cache size larger than free RAM available" << endl;
-		cout << " Free RAM " << free_ram / 1000000 << "MB" << endl;
+		cerr << endl <<" WARNING: Maximum cache size larger than free RAM available" << endl;
+		cerr << " Free RAM " << free_ram / 1000000 << "MB" << endl;
 	}
 
-	cout << "Maximum cache size:\t"
+	cerr << "Maximum cache size:\t"
 			<< statistics_.maximum_cache_size_bytes_ / 1000000 << " MB" << endl
 			<< endl;
 
@@ -195,14 +195,14 @@ uint64_t ComponentCache::compute_byte_size_infrasture() {
 }
 
 void ComponentCache::debug_dump_data(){
-    cout << "sizeof (CacheableComponent *, CacheEntryID) "
+    cerr << "sizeof (CacheableComponent *, CacheEntryID) "
          << sizeof(CacheableComponent *) << ", "
          << sizeof(CacheEntryID) << endl;
-    cout << "table (size/capacity) " << table_.size()
+    cerr << "table (size/capacity) " << table_.size()
          << "/" << table_.capacity() << endl;
-    cout << "entry_base_ (size/capacity) " << entry_base_.size()
+    cerr << "entry_base_ (size/capacity) " << entry_base_.size()
              << "/" << entry_base_.capacity() << endl;
-    cout << "free_entry_base_slots_ (size/capacity) " << free_entry_base_slots_.size()
+    cerr << "free_entry_base_slots_ (size/capacity) " << free_entry_base_slots_.size()
              << "/" << free_entry_base_slots_.capacity() << endl;
 
 //    uint64_t size_model_counts = 0;
@@ -212,7 +212,7 @@ void ComponentCache::debug_dump_data(){
 //                size_model_counts += pentry->size_of_model_count();
                 alloc_model_counts += pentry->alloc_of_model_count();
               }
-    cout << "model counts size " << alloc_model_counts << endl;
+    cerr << "model counts size " << alloc_model_counts << endl;
 }
 
 
